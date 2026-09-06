@@ -158,6 +158,8 @@
             </div>
             <div class="memory-heading-actions">
               <button class="text-action" id="exportMarkdownButton" type="button">导出 Markdown</button>
+              <button class="text-action" id="importMarkdownButton" type="button">导入 Markdown</button>
+              <input class="sr-only" id="importMarkdownInput" type="file" accept=".md,text/markdown,text/plain">
               <button class="text-action" id="openObsidianButton" type="button">打开 Obsidian</button>
               <button class="text-action" id="addMemoryButton" type="button">＋ 保存一条</button>
             </div>
@@ -315,6 +317,21 @@
       <p class="modal-kicker">INSTALL</p>
       <h2 id="iosInstallTitle">添加到主屏幕</h2>
       <p>在 Safari 中点击“分享”，然后选择“添加到主屏幕”。</p>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="importModal" hidden>
+    <section class="auth-modal import-modal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+      <button class="modal-close" id="importClose" type="button" aria-label="关闭导入预览">×</button>
+      <p class="modal-kicker">IMPORT WORKSPACE</p>
+      <h2 id="importTitle">确认导入旧版记录</h2>
+      <p>这一步只会把文件里的记录合并进当前工作台，不会删除或覆盖现有内容。</p>
+      <div class="import-summary" id="importSummary" aria-live="polite"></div>
+      <p class="import-note">同名记录会按原来的栏目保留；文件中的个人数据不会进入公开源码。</p>
+      <div class="form-actions">
+        <button class="button quiet" id="cancelImport" type="button">取消</button>
+        <button class="button primary" id="confirmImport" type="button">确认导入</button>
+      </div>
     </section>
   </div>
 
