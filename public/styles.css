@@ -262,6 +262,11 @@ body.modal-open { overflow: hidden; }
 .auth-feedback { min-height: 18px; margin: 12px 0 0; color: var(--green); font-size: 11px; line-height: 1.5; }
 .auth-feedback.error { color: #a84d3c; }
 .install-modal { padding-bottom: 20px; }
+.import-modal { width: min(100%, 520px); }
+.import-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 18px 0 12px; }
+.import-summary-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 11px 12px; color: var(--muted); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; font-size: 11px; }
+.import-summary-item strong { color: var(--orange-dark); font-size: 18px; }
+.import-note { margin: 12px 0 20px; color: var(--faint); font-size: 10px; line-height: 1.6; }
 @media (max-width: 700px) {
   body { padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
   .shell { width: calc(100% - 28px); padding-top: 14px; }
@@ -328,6 +333,7 @@ body.modal-open { overflow: hidden; }
   .add-decision-form > div { display: grid; grid-template-columns: 1fr 1fr; }
   .mobile-capture { display: none; }
   .auth-modal { padding: 24px 20px; }
+  .import-summary { grid-template-columns: 1fr; }
   .toast { right: 16px; bottom: 82px; }
 }
 /* Summer brand palette: extracted from the AI+IP poster. */
