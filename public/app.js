@@ -31,6 +31,7 @@
   let editingDecisionId = '';
   let editingMemoryId = '';
   let pendingScheduleSource = null;
+  let pendingImport = null;
   const $ = selector => document.querySelector(selector);
 
   function inferCategory(text) {
@@ -390,6 +391,163 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast('已导出 Markdown 文件。');
   }
+  function importId(prefix, index) {
+    return `${prefix}import-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`;
+  }
+  function importSections(markdown) {
+    const sections = {};
+    let current = '';
+    String(markdown || '').split(/\r?\n/).forEach(line => {
+      if (line.startsWith('## ')) {
+        current = line.slice(3).trim();
+        sections[current] = [];
+      } else if (current) {
+        sections[current].push(line);
+      }
+    });
+    return sections;
+  }
+  function importLines(lines) {
+    return (lines || []).map(line => line.trim()).filter(line => /^-\s/.test(line)).map(line => line.replace(/^-\s+(?:\[[ xX]\]\s+)?/, '').trim()).filter(Boolean);
+  }
+  function importDate(year, month, day) {
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+  function importDateTime(date) { return date ? `${date}T12:00:00` : new Date().toISOString(); }
+  function importTextKey(value) { return String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase(); }
+  function parseImportedMarkdown(markdown) {
+    const sections = importSections(markdown);
+    const exportDate = String(markdown).match(/导出日期：\s*(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const exportYear = Number(exportDate?.[1]) || new Date().getFullYear();
+    const importedAt = new Date().toISOString();
+    const completedTasks = importLines(sections['完成记录']).map((line, index) => {
+      const dateMatch = line.match(/[（(](\d{4})\/(\d{1,2})\/(\d{1,2})[）)]\s*$/);
+      const doneDate = dateMatch ? importDate(Number(dateMatch[1]), Number(dateMatch[2]), Number(dateMatch[3])) : '';
+      const title = (dateMatch ? line.slice(0, dateMatch.index) : line).trim();
+      return { id: importId('t', index), title, nextStep: '已完成', date: doneDate || dateKey(), done: true, doneAt: importDateTime(doneDate), scheduleId: '' };
+    }).filter(item => item.title);
+    const pendingTasks = importLines(sections['未完成任务']).map((line, index) => {
+      const separator = line.indexOf('：');
+      const title = (separator >= 0 ? line.slice(0, separator) : line).trim();
+      const nextStep = (separator >= 0 ? line.slice(separator + 1) : '').trim() || '完成这件事的第一个可交付动作';
+      return { id: importId('t', completedTasks.length + index), title, nextStep, date: dateKey(), done: false, doneAt: null, scheduleId: '' };
+    }).filter(item => item.title && !/^暂时没有/.test(item.title));
+    const schedules = importLines(sections['日程与截止']).map((line, index) => {
+      const dateMatch = line.match(/^(.*?)\s*·\s*(\d{1,2})月(\d{1,2})日/);
+      if (!dateMatch) return null;
+      const title = dateMatch[1].trim();
+      const date = importDate(exportYear, Number(dateMatch[2]), Number(dateMatch[3]));
+      const kind = /活动|会议|探讨|约线下|见面|参加/.test(title) ? 'event' : 'deadline';
+      return { id: importId('s', index), title, kind, date, time: '', done: false, doneAt: null, createdAt: importedAt };
+    }).filter(Boolean);
+    const typeMap = { 任务: 'task', 判断: 'decision', 跟进: 'followup' };
+    const categoryMap = Object.fromEntries(Object.entries(INBOX_CATEGORIES).map(([value, label]) => [label, value]));
+    const captures = importLines(sections['快速收件']).map((line, index) => {
+      const detailMatch = line.match(/^(.*?)[（(](任务|判断|跟进)\s*·\s*([^）)]+)[）)]\s*$/);
+      const text = (detailMatch ? detailMatch[1] : line).trim();
+      const type = detailMatch ? typeMap[detailMatch[2]] : typeOf(text);
+      const category = detailMatch ? categoryMap[detailMatch[3].trim()] || inferCategory(text) : inferCategory(text);
+      return { id: importId('c', index), type, text, category, scheduleId: '', done: false, createdAt: importedAt };
+    }).filter(item => item.text && !/^收件箱为空/.test(item.text));
+    const decisions = importLines(sections['判断队列']).map((line, index) => {
+      const separator = line.indexOf('：');
+      const question = (separator >= 0 ? line.slice(0, separator) : line).trim();
+      const context = (separator >= 0 ? line.slice(separator + 1) : '').trim() || '等待补充事实。';
+      return { id: importId('d', index), question, context, scheduleId: '' };
+    }).filter(item => item.question && !/^没有等待判断/.test(item.question));
+    const memoryLines = sections['可复用资料'] || [];
+    const memoryItems = [];
+    let memoryTitle = '';
+    let memoryContent = [];
+    const flushMemory = () => {
+      const content = memoryContent.join('\n').trim();
+      if (memoryTitle && content && !/^暂时没有可复用资料/.test(content)) {
+        memoryItems.push({ id: importId('m', memoryItems.length), title: memoryTitle, content, type: 'resource', createdAt: importedAt });
+      }
+      memoryTitle = '';
+      memoryContent = [];
+    };
+    memoryLines.forEach(line => {
+      if (line.startsWith('### ')) { flushMemory(); memoryTitle = line.slice(4).trim(); }
+      else if (memoryTitle) memoryContent.push(line);
+    });
+    flushMemory();
+    return {
+      tasks: [...completedTasks, ...pendingTasks],
+      schedules,
+      captures,
+      decisions,
+      memoryItems,
+      counts: {
+        tasks: completedTasks.length + pendingTasks.length,
+        schedules: schedules.length,
+        captures: captures.length,
+        decisions: decisions.length,
+        memoryItems: memoryItems.length
+      }
+    };
+  }
+  function appendImportedItems(target, items, keyOf) {
+    const existing = new Set(target.map(item => importTextKey(keyOf(item))));
+    let added = 0;
+    items.forEach(item => {
+      const key = importTextKey(keyOf(item));
+      if (!key || existing.has(key)) return;
+      target.push(item);
+      existing.add(key);
+      added += 1;
+    });
+    return added;
+  }
+  function mergeImportedState(data) {
+    return {
+      tasks: appendImportedItems(state.tasks, data.tasks, item => `${item.title}|${item.date}|${item.done}`),
+      schedules: appendImportedItems(state.scheduleItems, data.schedules, item => `${item.title}|${item.date}|${item.kind}`),
+      captures: appendImportedItems(state.captures, data.captures, item => item.text),
+      decisions: appendImportedItems(state.decisions, data.decisions, item => `${item.question}|${item.context}`),
+      memoryItems: appendImportedItems(state.memoryItems, data.memoryItems, item => `${item.title}|${item.content}`)
+    };
+  }
+  function renderImportSummary(data) {
+    const labels = [['tasks', '任务'], ['schedules', '日程'], ['captures', '快速收件'], ['decisions', '判断队列'], ['memoryItems', '可复用资料']];
+    $('#importSummary').innerHTML = labels.map(([key, label]) => `<div class="import-summary-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(data.counts[key])}</strong></div>`).join('');
+  }
+  function closeImportModal() {
+    pendingImport = null;
+    $('#importModal').hidden = true;
+    syncModalOpenState();
+  }
+  async function readImportFile(file) {
+    try {
+      const markdown = await file.text();
+      const data = parseImportedMarkdown(markdown);
+      if (!Object.values(data.counts).some(Boolean)) throw new Error('没有识别到可导入的工作台记录');
+      pendingImport = data;
+      renderImportSummary(data);
+      $('#importModal').hidden = false;
+      document.body.classList.add('modal-open');
+    } catch (error) {
+      toast(error.message || '文件读取失败，请选择工作台导出的 Markdown 文件。');
+    }
+  }
+  $('#importMarkdownButton').addEventListener('click', () => $('#importMarkdownInput').click());
+  $('#importMarkdownInput').addEventListener('change', event => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) readImportFile(file);
+  });
+  $('#importClose').addEventListener('click', closeImportModal);
+  $('#cancelImport').addEventListener('click', closeImportModal);
+  $('#importModal').addEventListener('click', event => { if (event.target === $('#importModal')) closeImportModal(); });
+  $('#confirmImport').addEventListener('click', () => {
+    if (!pendingImport) return closeImportModal();
+    const added = mergeImportedState(pendingImport);
+    const total = Object.values(added).reduce((sum, count) => sum + count, 0);
+    save();
+    closeImportModal();
+    render();
+    toast(total ? `已导入 ${total} 条记录，正在同步。` : '这些记录已经存在，没有新增内容。');
+  });
   async function openObsidian() {
     const markdown = buildWorkbenchMarkdown();
     if (!navigator.clipboard?.writeText) {
