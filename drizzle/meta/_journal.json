@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787487816151,
+      "tag": "0000_mature_toro",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787490269258,
+      "tag": "0001_zippy_george_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787494251982,
+      "tag": "0002_clever_wind_dancer",
+      "breakpoints": true
+    }
+  ]
+}

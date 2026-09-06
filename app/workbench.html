@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7efd9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>我的工作台 · 今日</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <main id="main" class="shell">
+    <header class="topbar">
+      <a class="brand" href="#today" aria-label="个人工作台今日首页"><span id="brandInitial">S</span><b id="workspaceName">MY OS</b></a>
+      <div class="topbar-actions">
+        <div class="sync-state" id="syncState" role="status"><i aria-hidden="true"></i><span>本地模式</span></div>
+        <button class="utility-button refresh-button" id="refreshAppButton" type="button">刷新</button>
+        <button class="utility-button" id="installButton" type="button" hidden>安装应用</button>
+        <button class="utility-button mode-button" id="modeButton" type="button" aria-pressed="false">随手模式</button>
+        <button class="utility-button" id="profileButton" type="button">个人设置</button>
+        <button class="utility-button" id="accountButton" type="button">连接设备</button>
+        <div class="day-state"><span id="todayLabel"></span><i aria-hidden="true"></i><strong id="dayState">准备今天</strong></div>
+      </div>
+    </header>
+
+    <section id="today" class="commitment" aria-labelledby="commitmentTitle">
+      <div class="section-kicker"><span>TODAY'S RESULT</span><span>01</span></div>
+      <div class="commitment-view" id="commitmentView">
+        <div class="commitment-main">
+          <p class="commitment-prompt">今天唯一最重要的结果</p>
+          <h1 id="commitmentTitle">写下今天唯一最重要的结果</h1>
+          <div class="commitment-actions">
+            <button class="button primary" id="focusButton" type="button">开始专注 <span aria-hidden="true">→</span></button>
+            <button class="button quiet" id="editCommitment" type="button">修改</button>
+            <button class="text-button" id="completeCommitment" type="button">标记完成</button>
+          </div>
+        </div>
+        <div class="commitment-avatar-wrap" onerror="this.style.display='none'">
+          <img class="commitment-avatar" id="workspaceAvatar" src="/avatar.png" alt="我的个人头像" width="181" height="520">
+          <div class="avatar-ground-shadow" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <form class="commitment-form" id="commitmentForm" hidden>
+        <label for="commitmentInput">今天结束前，我要完成</label>
+        <input id="commitmentInput" maxlength="80" required>
+        <label for="nextStepInput">可以立即开始的下一步</label>
+        <input id="nextStepInput" maxlength="80" required>
+        <div class="form-actions"><button class="button primary" type="submit">保存</button><button class="button quiet" id="cancelCommitment" type="button">取消</button></div>
+      </form>
+
+      <div class="focus-strip" id="focusStrip" hidden aria-live="polite">
+        <div><span>FOCUS SESSION</span><strong id="timerDisplay">25:00</strong></div>
+        <p id="focusTask"></p>
+        <div class="focus-actions"><button class="button dark" id="timerToggle" type="button">暂停</button><button class="button quiet" id="timerReset" type="button">重置</button></div>
+      </div>
+    </section>
+
+    <section class="today-plan panel" aria-labelledby="planTitle">
+      <div class="plan-heading">
+        <div><div class="section-kicker"><span>TODAY FLOW</span><span>02</span></div><h2 id="planTitle">今日执行流</h2></div>
+        <div class="plan-controls"><label for="planDate">查看日期</label><input id="planDate" type="date"><button class="text-action" id="addTaskButton" type="button">＋ 添加一件事</button></div>
+      </div>
+      <form class="add-task-form" id="addTaskForm" hidden>
+        <input id="newTaskInput" maxlength="80" placeholder="写下一个可以完成的动作" required>
+        <label class="compact-field"><span>安排哪天做</span><input id="newTaskDate" type="date" required></label>
+        <label class="compact-field"><span>最晚哪天交（可选）</span><input id="newTaskDeadline" type="date"></label>
+        <label class="compact-field"><span>截止时间（可选）</span><input id="newTaskDeadlineTime" type="time"></label>
+        <button class="button primary" type="submit">添加</button>
+        <button class="button quiet" id="cancelTask" type="button">取消</button>
+      </form>
+      <div class="today-list" id="todayList"></div>
+    </section>
+
+    <section id="schedule" class="panel schedule" aria-labelledby="scheduleTitle">
+      <div class="schedule-heading">
+        <div>
+          <div class="section-kicker"><span>DATES &amp; DEADLINES</span><span>03</span></div>
+          <h2 id="scheduleTitle">日程与截止</h2>
+          <p class="schedule-intro">截止事项看最晚哪天交，固定活动看什么时候发生。</p>
+        </div>
+        <button class="text-action" id="addScheduleButton" type="button">＋ 添加日期</button>
+      </div>
+      <form class="schedule-form" id="scheduleForm" hidden>
+        <label for="scheduleTitleInput">事项</label>
+        <input id="scheduleTitleInput" maxlength="100" placeholder="例如：提交视频成片 / 参加品牌活动" required>
+        <div class="schedule-form-row">
+          <label for="scheduleTypeInput">类型</label>
+          <select id="scheduleTypeInput">
+            <option value="deadline">最晚截止</option>
+            <option value="event">固定活动</option>
+          </select>
+          <label for="scheduleDateInput">日期</label>
+          <input id="scheduleDateInput" type="date" required>
+          <label for="scheduleTimeInput">时间</label>
+          <input id="scheduleTimeInput" type="time">
+        </div>
+        <div class="form-actions"><button class="button primary" id="scheduleSaveButton" type="submit">保存日期</button><button class="button quiet" id="cancelSchedule" type="button">取消</button></div>
+      </form>
+      <div class="schedule-summary" id="scheduleSummary" aria-live="polite"></div>
+      <div class="schedule-list" id="scheduleList" aria-live="polite"></div>
+    </section>
+
+    <section id="decisions" class="panel decisions" aria-labelledby="decisionTitle">
+      <div class="section-kicker"><span>DECISION QUEUE</span><span id="decisionCount">00</span></div>
+      <div class="decision-heading"><h2 id="decisionTitle">等你判断</h2><button class="text-action" id="addDecisionButton" type="button">＋ 新建判断</button></div>
+      <form class="add-decision-form" id="addDecisionForm" hidden>
+        <input id="decisionQuestionInput" maxlength="100" placeholder="需要你决定什么？" required>
+        <input id="decisionContextInput" maxlength="140" placeholder="已知事实或当前背景" required>
+        <div><button class="button primary" id="decisionSubmitButton" type="submit">加入判断队列</button><button class="button quiet" id="cancelDecision" type="button">取消</button></div>
+      </form>
+      <div class="decision-list" id="decisionList"></div>
+    </section>
+
+    <section id="capture" class="panel capture" aria-labelledby="captureTitle">
+      <div class="section-kicker"><span>QUICK INBOX</span><span>04</span></div>
+      <h2 id="captureTitle">先收进来，不打断现在。</h2>
+      <p class="capture-intro" id="captureIntro">想到什么先写下来，系统会先帮你识别类型。</p>
+      <form id="captureForm" class="capture-form">
+        <label class="sr-only" for="captureInput">输入任务、判断或跟进事项</label>
+        <textarea id="captureInput" rows="2" maxlength="160" placeholder="任务、想法、要跟进的人……" required></textarea>
+        <div class="capture-form-actions"><span id="captureModeHint">自动识别为任务 / 判断 / 跟进</span><div class="capture-actions"><button class="voice-button" id="voiceCaptureButton" type="button">语音记录</button><button class="button primary" type="submit">收进来 <span aria-hidden="true">↓</span></button></div></div>
+        <p class="voice-status" id="voiceStatus" aria-live="polite"></p>
+      </form>
+      <div class="inbox-recent-heading"><span>最近 3 条预览</span><span id="inboxHomeCount" role="status"></span></div>
+      <div class="inbox-recent-preview" id="inboxRecentPreview" aria-live="polite"></div>
+      <button class="button quiet inbox-open-button" id="openInboxButton" type="button">整理收件箱 <span aria-hidden="true">→</span></button>
+    </section>
+
+    <section class="day-close" aria-labelledby="closeTitle">
+      <div><span>END OF DAY</span><h2 id="closeTitle">给明天留下一个清楚的开局。</h2><p id="closeSummary">今天完成 0/0，结束前确认明天第一步。</p></div>
+      <button class="button dark" id="closeDayButton" type="button">结束今天</button>
+      <form id="closeDayForm" hidden><input id="tomorrowInput" maxlength="100" placeholder="明天打开电脑后的第一步" required><button class="button primary" type="submit">保存</button><button class="button quiet" id="cancelClose" type="button">取消</button></form>
+    </section>
+
+    <section id="workRadar" class="panel work-radar" aria-labelledby="radarTitle">
+      <div class="radar-heading">
+        <div>
+          <div class="section-kicker"><span>WORK RADAR</span><span>05</span></div>
+          <h2 id="radarTitle">工作雷达</h2>
+          <p class="radar-intro">回顾今天 / 本周 / 本月做完了什么；展望栏自动读收件箱里待做的事，处理完自动消失。</p>
+        </div>
+      </div>
+      <div class="radar-grid" id="radarGrid" aria-live="polite"></div>
+      <details class="memory-details" id="workMemory">
+        <summary>已保存资料 <span>保留旧的可复用资料</span></summary>
+        <div class="memory-details-body">
+          <div class="memory-heading">
+            <div>
+              <div class="section-kicker"><span>WORK MEMORY</span><span>兼容</span></div>
+              <h2 id="memoryTitle">可复用资料</h2>
+              <p class="memory-intro">一次性任务放收件箱；这里只放以后还会调用的文件位置、客户背景、方案模板或复盘结论。</p>
+            </div>
+            <div class="memory-heading-actions">
+              <button class="text-action" id="exportMarkdownButton" type="button">导出 Markdown</button>
+              <button class="text-action" id="openObsidianButton" type="button">打开 Obsidian</button>
+              <button class="text-action" id="addMemoryButton" type="button">＋ 保存一条</button>
+            </div>
+          </div>
+          <form class="memory-form" id="memoryForm" hidden>
+            <label for="memoryTitleInput">资料名称</label>
+            <input id="memoryTitleInput" maxlength="80" placeholder="例如：项目背景 / 合作方背景 / 方案模板" required>
+            <label for="memoryContentInput">可复用内容 / 位置</label>
+            <textarea id="memoryContentInput" rows="3" maxlength="500" placeholder="文件路径、链接、客户背景、方案模板或复盘结论……" required></textarea>
+            <div class="memory-form-row">
+              <label for="memoryTypeInput">资料类型</label>
+              <select id="memoryTypeInput">
+                <option value="idea">背景 / 判断</option>
+                <option value="resource">文件 / 资料</option>
+                <option value="review">复盘结论</option>
+                <option value="template">方案模板</option>
+              </select>
+            </div>
+            <div class="form-actions"><button class="button primary" id="memorySubmitButton" type="submit">保存到可复用资料</button><button class="button quiet" id="cancelMemory" type="button">取消</button></div>
+          </form>
+          <div class="memory-toolbar">
+            <label class="sr-only" for="memorySearch">搜索工作记忆</label>
+            <input id="memorySearch" type="search" placeholder="搜索标题、内容或关键词" autocomplete="off">
+            <span id="memoryCount"></span>
+          </div>
+          <div class="memory-list" id="memoryList" aria-live="polite"></div>
+        </div>
+      </details>
+   </section>
+   </main>
+
+  <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="手机工作台导航">
+    <a href="#capture" data-mobile-tab="capture" class="active"><span aria-hidden="true">＋</span><b>随手记</b></a>
+    <a href="#today" data-mobile-tab="today"><span aria-hidden="true">○</span><b>今天</b></a>
+    <a href="#workRadar" data-mobile-tab="radar"><span aria-hidden="true">↗</span><b>历史</b></a>
+  </nav>
+
+  <button class="mobile-capture" id="mobileCapture" type="button" aria-label="快速收进一条信息">＋</button>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="modal-backdrop" id="inboxModal" hidden>
+    <section class="inbox-modal" role="dialog" aria-modal="true" aria-labelledby="inboxModalTitle">
+      <div class="modal-heading">
+        <div><p class="modal-kicker">INBOX ORGANIZER</p><h2 id="inboxModalTitle">整理收件箱</h2><p class="modal-description">搜索、筛选并处理全部收件内容；最近 3 条只是首页预览。</p></div>
+        <button class="modal-close" id="inboxClose" type="button" aria-label="关闭整理收件箱">×</button>
+      </div>
+      <div class="inbox-toolbar" aria-label="收件箱搜索和筛选">
+        <label class="sr-only" for="captureSearch">搜索收件箱</label>
+        <input id="captureSearch" type="search" placeholder="搜索收件内容" autocomplete="off">
+        <label class="sr-only" for="captureCategory">按分类筛选</label>
+        <select id="captureCategory">
+          <option value="all">全部</option>
+          <option value="summer-os">我的系统</option>
+          <option value="content-ip">内容/IP</option>
+          <option value="client-partner">客户/合作</option>
+          <option value="admin-other">行政/其他</option>
+          <option value="uncategorized">未分类</option>
+        </select>
+        <span id="inboxCount" role="status"></span>
+      </div>
+      <div class="inbox-preview" id="inboxPreview" aria-live="polite"></div>
+      <button class="inbox-more" id="inboxMore" type="button" hidden>继续显示（剩余 <span id="inboxRemaining">0</span> 条）</button>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="taskEditModal" hidden>
+    <section class="auth-modal task-edit-modal" role="dialog" aria-modal="true" aria-labelledby="taskEditTitleLabel">
+      <button class="modal-close" id="taskEditClose" type="button" aria-label="关闭任务修改">×</button>
+      <p class="modal-kicker">EDIT TASK</p>
+      <h2 id="taskEditTitleLabel">修改任务</h2>
+      <p>写错了可以直接改，主页主线和关联日期会一起更新。</p>
+      <form id="taskEditForm">
+        <label for="taskEditTitle">任务名称</label>
+        <input id="taskEditTitle" maxlength="80" required>
+        <label for="taskEditNextStep">可以立即开始的下一步</label>
+        <input id="taskEditNextStep" maxlength="80">
+        <label for="taskEditDate">安排哪天做</label>
+        <input id="taskEditDate" type="date" required>
+        <div class="form-actions"><button class="button primary" type="submit">保存修改</button><button class="button quiet" id="cancelTaskEdit" type="button">取消</button></div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="inboxEditModal" hidden>
+    <section class="auth-modal inbox-edit-modal" role="dialog" aria-modal="true" aria-labelledby="inboxEditTitleLabel">
+      <button class="modal-close" id="inboxEditClose" type="button" aria-label="关闭收件事项修改">×</button>
+      <p class="modal-kicker">EDIT INBOX ITEM</p>
+      <h2 id="inboxEditTitleLabel">修改收件事项</h2>
+      <p>修改后，首页预览和工作雷达会同步更新。</p>
+      <form id="inboxEditForm">
+        <label for="inboxEditText">事项内容</label>
+        <textarea id="inboxEditText" rows="4" maxlength="160" required></textarea>
+        <label for="inboxEditCategory">所属分类</label>
+        <select id="inboxEditCategory">
+          <option value="summer-os">我的系统</option>
+          <option value="content-ip">内容/IP</option>
+          <option value="client-partner">客户/合作</option>
+          <option value="admin-other">行政/其他</option>
+          <option value="uncategorized">未分类</option>
+        </select>
+        <div class="form-actions"><button class="button primary" type="submit">保存修改</button><button class="button quiet" id="cancelInboxEdit" type="button">取消</button></div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="authModal" hidden>
+    <section class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <button class="modal-close" id="authClose" type="button" aria-label="关闭">×</button>
+      <p class="modal-kicker">PHONE × DESKTOP</p>
+      <h2 id="authTitle">连接另一台设备</h2>
+      <p>不需要注册。用一次性同步码，让手机和电脑打开同一份工作台。</p>
+      <div class="pair-tabs" role="tablist">
+        <button class="active" id="pairStartTab" type="button">这台已有内容</button>
+        <button id="pairJoinTab" type="button">这台是新设备</button>
+      </div>
+      <div id="pairStartPanel">
+        <ol class="pair-steps"><li>在另一台设备打开这个工作台</li><li>点击“连接设备”</li><li>输入这里生成的 6 位同步码</li></ol>
+        <button class="button primary" id="pairStartButton" type="button">生成一次性同步码</button>
+        <div class="pair-code" id="pairCode" hidden></div>
+        <small class="pair-hint" id="pairHint"></small>
+      </div>
+      <form id="authForm" hidden>
+        <label for="authEmail">输入另一台设备上的 6 位同步码</label>
+        <input id="authEmail" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" required>
+        <button class="button primary" id="authSubmit" type="submit">连接并同步</button>
+      </form>
+      <button class="button quiet auth-signout" id="signOutButton" type="button" hidden>断开这台设备</button>
+      <p class="auth-feedback" id="authFeedback" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="nameModal" hidden>
+    <section class="auth-modal name-modal" role="dialog" aria-modal="true" aria-labelledby="nameTitle">
+      <button class="modal-close" id="nameClose" type="button" aria-label="关闭个人设置">×</button>
+      <p class="modal-kicker">WELCOME TO YOUR OS</p>
+      <h2 id="nameTitle">设置你的名字和头像</h2>
+      <p>名字和头像可以随时更换，并同步到你连接的设备。</p>
+      <form id="nameForm">
+        <label for="nameInput">你的名字或昵称</label>
+        <input id="nameInput" maxlength="16" placeholder="例如：小雨、Cherry、王同学" required>
+        <label class="avatar-picker" for="avatarInput">
+          <img id="avatarPreview" src="/avatar.png" alt="头像预览">
+          <span><b>更换头像</b><small>支持 JPG、PNG，选择后会自动裁成正方形</small></span>
+        </label>
+        <input class="sr-only" id="avatarInput" type="file" accept="image/jpeg,image/png,image/webp">
+        <button class="button primary" id="nameSave" type="submit">保存个人设置</button>
+        <button class="button quiet reset-workspace" id="resetWorkspace" type="button">清空当前测试数据，从 0 开始</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="iosInstallModal" hidden>
+    <section class="auth-modal install-modal" role="dialog" aria-modal="true" aria-labelledby="iosInstallTitle">
+      <button class="modal-close" id="iosInstallClose" type="button" aria-label="关闭">×</button>
+      <p class="modal-kicker">INSTALL</p>
+      <h2 id="iosInstallTitle">添加到主屏幕</h2>
+      <p>在 Safari 中点击“分享”，然后选择“添加到主屏幕”。</p>
+    </section>
+  </div>
+
+  <script>
+    if (new URLSearchParams(location.search).get('fresh') === '1') {
+      localStorage.removeItem('summer-os-minimum-v1');
+    }
+  </script>
+  <script src="/day-rollover.js"></script>
+  <script src="/app.js"></script>
+  <script src="/sync.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(function (registration) {
+        registration.update().catch(function () {});
+      }).catch(function () {});
+    }
+  </script>
+</body>
+</html>
