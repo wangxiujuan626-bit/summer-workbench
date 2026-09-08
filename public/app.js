@@ -73,7 +73,11 @@
   }
   function save(options = {}) {
     localStorage.setItem(KEY, JSON.stringify(state));
-    if (!options.remote) window.dispatchEvent(new CustomEvent('summer-os:state-saved', { detail: state }));
+    if (!options.remote) {
+      const event = new CustomEvent('summer-os:state-saved', { detail: state });
+      event.immediate = Boolean(options.immediate);
+      window.dispatchEvent(event);
+    }
   }
   function setTodayLabel() {
     const today = new Date();
@@ -1115,7 +1119,7 @@
   $('#closeDayButton').addEventListener('click', () => { $('#closeDayButton').hidden = true; $('#closeDayForm').hidden = false; $('#tomorrowInput').value = state.tomorrow; $('#tomorrowInput').focus(); });
   $('#cancelClose').addEventListener('click', () => { $('#closeDayForm').hidden = true; $('#closeDayButton').hidden = false; });
   $('#closeDayForm').addEventListener('submit', event => {
-    event.preventDefault(); state.tomorrow = $('#tomorrowInput').value.trim(); save(); renderToday();
+    event.preventDefault(); state.tomorrow = $('#tomorrowInput').value.trim(); save({ immediate: true }); renderToday();
     $('#closeDayForm').hidden = true; $('#closeDayButton').hidden = false; toast('今天已收好，明天第一步已留下。');
   });
 
