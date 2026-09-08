@@ -56,6 +56,7 @@ test("fan edition keeps its core product flows", async () => {
   assert.match(appScript, /function buildWorkbenchMarkdown/);
   assert.match(appScript, /obsidian:\/\/new/);
   assert.match(appScript, /data-mobile-tab/);
+  assert.match(appScript, /state\.tomorrow = .*save\(\{ immediate: true \}\)/);
   assert.match(appScript, /data-decide-action[\s\S]*?state\.decisions = state\.decisions\.filter\(decision => decision\.id !== id\)/);
   assert.match(appScript, /下一条切换为/);
   assert.equal(JSON.parse(manifest).display, "standalone");
@@ -124,6 +125,7 @@ test("remote sync and installed app keep rollover and refresh hooks", async () =
   assert.match(appScript, /visibilitychange/);
   assert.match(appScript, /window\.addEventListener\('focus'/);
   assert.match(syncScript, /refreshInstalledApp/);
+  assert.match(syncScript, /event\?\.immediate/);
   assert.match(syncScript, /registration\.update/);
   assert.match(syncScript, /window\.location\.reload/);
   assert.match(worker, /summer-workbench-lite-v6/);
