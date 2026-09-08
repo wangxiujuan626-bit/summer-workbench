@@ -163,10 +163,14 @@
     }
   }
 
-  function scheduleUpload() {
+  function scheduleUpload(event) {
     if (!initialized) return;
     setStatus(navigator.onLine ? '待同步' : '离线 · 已缓存', navigator.onLine ? 'working' : 'offline');
     clearTimeout(uploadTimer);
+    if (event?.immediate) {
+      void uploadState();
+      return;
+    }
     uploadTimer = setTimeout(uploadState, 700);
   }
 
