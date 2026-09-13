@@ -14,6 +14,10 @@
   const pairStartPanel = $('#pairStartPanel');
   const pairStartButton = $('#pairStartButton');
   const pairCode = $('#pairCode');
+  const pairShare = $('#pairShare');
+  const pairQr = $('#pairQr');
+  const pairUrl = $('#pairUrl');
+  const copyPairUrl = $('#copyPairUrl');
   const pairHint = $('#pairHint');
   const nameModal = $('#nameModal');
   const nameForm = $('#nameForm');
@@ -30,23 +34,65 @@
   const refreshAppButton = $('#refreshAppButton');
   const iosInstallModal = $('#iosInstallModal');
   const iosInstallClose = $('#iosInstallClose');
+  const PENDING_SYNC_KEY = 'summer-os-pending-sync-v1';
+  const DISPLAY_NAME_KEY = 'summer-os-display-name-v1';
+  const LOCAL_AVATAR_KEY = 'summer-os-avatar-v1';
+  // The local server can choose a free port when 8765 is already occupied.
+  // HTTP is reserved for the local package; the hosted version is HTTPS.
+  const localOnly = location.protocol === 'file:' || location.protocol === 'http:';
+  const workspaceApiPath = localOnly ? '/api/local/workspace' : '/api/workspace';
   let revision = 0;
-  let displayName = '';
+  let displayName = localStorage.getItem(DISPLAY_NAME_KEY) || '';
   let initialized = false;
-  let uploadTimer = null;
   let syncing = false;
+  let pendingUpload = localStorage.getItem(PENDING_SYNC_KEY) === '1';
   let deferredInstallPrompt = null;
   let pendingAvatar = null;
-  let avatarUrl = '/avatar.png';
+  let avatarUrl = localStorage.getItem(LOCAL_AVATAR_KEY) || '/avatar-default.svg';
 
   function setStatus(label, tone = '') {
     statusElement.querySelector('span').textContent = label;
     statusElement.dataset.tone = tone;
   }
 
+  function markPendingUpload() {
+    pendingUpload = true;
+    localStorage.setItem(PENDING_SYNC_KEY, '1');
+  }
+
+  function clearPendingUpload() {
+    pendingUpload = false;
+    localStorage.removeItem(PENDING_SYNC_KEY);
+  }
+
+  function setLocalStatus() {
+    setStatus(localOnly ? '本机保存 · 可连接设备' : '已保存到本机', 'local');
+    if (localOnly) {
+      accountButton.hidden = false;
+      refreshAppButton.title = '刷新并同步已连接设备';
+    }
+  }
+
   function setFeedback(message, error = false) {
     authFeedback.textContent = message;
     authFeedback.classList.toggle('error', error);
+  }
+
+  async function copyText(value) {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+    const helper = document.createElement('textarea');
+    helper.value = value;
+    helper.setAttribute('readonly', '');
+    helper.style.position = 'fixed';
+    helper.style.opacity = '0';
+    document.body.appendChild(helper);
+    helper.select();
+    const copied = document.execCommand('copy');
+    helper.remove();
+    if (!copied) throw new Error('复制失败，请长按地址复制');
   }
 
   async function readJsonResponse(response, fallbackMessage) {
@@ -64,6 +110,7 @@
 
   function applyName(name) {
     displayName = String(name || '').trim().slice(0, 16);
+    if (displayName) localStorage.setItem(DISPLAY_NAME_KEY, displayName);
     const label = displayName ? `${displayName} OS` : 'MY OS';
     workspaceName.textContent = label.toUpperCase();
     brandInitial.textContent = (displayName || 'M').slice(0, 1).toUpperCase();
@@ -71,11 +118,21 @@
   }
 
   function applyAvatar(url) {
-    avatarUrl = url || '/avatar.png';
-    const separator = avatarUrl.includes('?') ? '&' : '?';
-    const freshUrl = `${avatarUrl}${separator}t=${Date.now()}`;
+    avatarUrl = url || '/avatar-default.svg';
+    const freshUrl = avatarUrl.startsWith('data:')
+      ? avatarUrl
+      : `${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
     workspaceAvatar.src = freshUrl;
     avatarPreview.src = freshUrl;
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('图片保存失败'));
+      reader.readAsDataURL(blob);
+    });
   }
 
   function openNameModal(required = false) {
@@ -101,6 +158,8 @@
     showPairMode('start');
     pairCode.hidden = true;
     pairCode.textContent = '';
+    pairShare.hidden = true;
+    pairUrl.textContent = '';
     pairHint.textContent = '';
   }
 
@@ -122,8 +181,8 @@
   function applyWorkspace(workspace) {
     if (!workspace) return;
     revision = Number(workspace.revision || 0);
-    applyName(workspace.displayName || '');
-    applyAvatar(workspace.avatarUrl || '/avatar.png');
+    applyName(workspace.displayName || displayName);
+    applyAvatar(workspace.avatarUrl || '/avatar-default.svg');
     const remoteState = workspace.state;
     if (remoteState && typeof remoteState === 'object' && Object.keys(remoteState).length) {
       window.SummerOS.applyRemoteState(remoteState);
@@ -131,99 +190,172 @@
   }
 
   async function fetchWorkspace() {
-    const response = await fetch('/api/workspace', { cache: 'no-store' });
-    if (!response.ok) throw new Error('工作台暂时连接不上');
-    return response.json();
+    const response = await fetch(workspaceApiPath, { cache: 'no-store' });
+    const data = await readJsonResponse(response, '暂时无法连接同步服务');
+    if (!response.ok) throw new Error(data?.error || '暂时无法连接同步服务');
+    return data;
+  }
+
+  async function joinWorkspaceByCode(code) {
+    const response = await fetch(localOnly ? '/api/local/pair/join' : '/api/pair/join', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const data = await readJsonResponse(response, '暂时无法连接设备，请重新启动工作台后再试');
+    if (!response.ok) throw new Error(data?.error || '连接失败');
+    if (!data?.workspace) throw new Error('没有找到可同步的工作台');
+    return data;
   }
 
   async function uploadState() {
-    if (!initialized || syncing || !navigator.onLine) return;
+    // The local package syncs over the same Wi‑Fi, so it must not depend on
+    // the browser's internet-connectivity flag. navigator.onLine can be false
+    // while the local server is still reachable on the LAN.
+    if (!initialized || syncing || (!localOnly && !navigator.onLine) || !pendingUpload) return false;
     syncing = true;
-    setStatus('同步中…', 'working');
+    setStatus('正在同步…', 'working');
     try {
-      const response = await fetch('/api/workspace', {
+      const body = { displayName, state: window.SummerOS.getState(), revision };
+      if (localOnly) body.avatarUrl = avatarUrl;
+      const response = await fetch(workspaceApiPath, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ displayName, state: window.SummerOS.getState(), revision })
+        body: JSON.stringify(body)
       });
-      const data = await response.json();
-      if (response.status === 409 && data.workspace) {
-        applyWorkspace(data.workspace);
+      const data = await readJsonResponse(response, '同步稍后会自动重试');
+      if (response.status === 409 && data?.workspace) {
+        const localState = window.SummerOS.getState();
+        const mergedState = window.SummerOS.mergeRemoteState(data.workspace.state, localState);
+        revision = Number(data.workspace.revision || revision);
+        applyWorkspace({ ...data.workspace, state: mergedState });
+        markPendingUpload();
+        setLocalStatus();
+        return false;
       } else if (!response.ok) {
-        throw new Error(data.error || '同步失败');
+        throw new Error(data?.error || '同步失败');
       } else {
         revision = Number(data.revision || revision + 1);
       }
+      clearPendingUpload();
       setStatus('已同步', 'ready');
+      return true;
     } catch (error) {
-      setStatus(navigator.onLine ? '同步失败' : '离线 · 已缓存', navigator.onLine ? 'error' : 'offline');
+      markPendingUpload();
+      setLocalStatus();
       console.error('Workspace sync failed:', error);
+      return false;
     } finally {
       syncing = false;
     }
   }
 
-  function scheduleUpload(event) {
+  function scheduleUpload() {
     if (!initialized) return;
-    setStatus(navigator.onLine ? '待同步' : '离线 · 已缓存', navigator.onLine ? 'working' : 'offline');
-    clearTimeout(uploadTimer);
-    if (event?.immediate) {
-      void uploadState();
-      return;
-    }
-    uploadTimer = setTimeout(uploadState, 700);
+    markPendingUpload();
+    setLocalStatus();
   }
 
   async function initialize() {
-    setStatus('正在连接…', 'working');
+    setLocalStatus();
+    if (localOnly) applyAvatar(avatarUrl);
     try {
       const params = new URLSearchParams(location.search);
+      const linkPairCode = params.get('pair')?.replace(/\D/g, '').slice(0, 6) || '';
+      let pairedFromLink = false;
+      let pairLinkFailed = false;
       if (params.get('fresh') === '1') {
-        await fetch('/api/reset', { method: 'POST' });
+        await fetch(localOnly ? '/api/local/reset' : '/api/reset', { method: 'POST' }).catch(() => {});
         history.replaceState({}, '', `${location.pathname}${location.hash}`);
       }
-      const workspace = await fetchWorkspace();
-      revision = Number(workspace.revision || 0);
-      applyName(workspace.displayName || '');
-      applyAvatar(workspace.avatarUrl || '/avatar.png');
-      if (workspace.state && typeof workspace.state === 'object' && Object.keys(workspace.state).length) {
-        window.SummerOS.applyRemoteState(workspace.state);
-      }
       initialized = true;
-      setStatus('已同步', 'ready');
+      if (localOnly) {
+        if (linkPairCode.length === 6) {
+          try {
+            setStatus('正在连接设备…', 'working');
+            const data = await joinWorkspaceByCode(linkPairCode);
+            applyWorkspace(data.workspace);
+            clearPendingUpload();
+            pairedFromLink = true;
+            history.replaceState({}, '', `${location.pathname}${location.hash}`);
+            setStatus('已同步', 'ready');
+          } catch (error) {
+            pairLinkFailed = true;
+            setLocalStatus();
+            console.error('Pair link initialization failed:', error);
+          }
+        }
+        try {
+          if (!pairedFromLink && !pairLinkFailed) {
+            const workspace = await fetchWorkspace();
+            const hasRemoteContent = Boolean(
+              workspace?.displayName
+              || (workspace?.avatarUrl && workspace.avatarUrl !== '/avatar-default.svg')
+              || (workspace?.state && Object.keys(workspace.state).length)
+            );
+            if (hasRemoteContent) applyWorkspace(workspace);
+          }
+        } catch (error) {
+          console.error('Local workspace initialization failed:', error);
+        }
+      }
+      if (pairLinkFailed) {
+        openAuthModal();
+        showPairMode('join');
+        authEmail.value = linkPairCode;
+        setFeedback('二维码配对没有完成，请确认手机和电脑在同一 Wi‑Fi 后，再点击“连接并同步”。', true);
+        return;
+      }
       if (!displayName) {
         openNameModal(true);
-      } else if (!workspace.state || !Object.keys(workspace.state).length) {
-        await uploadState();
       }
     } catch (error) {
       initialized = true;
-      setStatus('本机可用 · 待联网', 'offline');
+      setLocalStatus();
       console.error('Workspace initialization failed:', error);
     }
   }
 
   window.addEventListener('summer-os:state-saved', scheduleUpload);
-  window.addEventListener('online', () => { setStatus('待同步', 'working'); uploadState(); });
-  window.addEventListener('offline', () => setStatus('离线 · 已缓存', 'offline'));
+  window.addEventListener('online', setLocalStatus);
+  window.addEventListener('offline', setLocalStatus);
 
-  async function refreshInstalledApp() {
+  async function syncNow() {
+    if (!initialized || syncing) return false;
+    if (!localOnly && !navigator.onLine) {
+      setLocalStatus();
+      return false;
+    }
     refreshAppButton.disabled = true;
-    refreshAppButton.textContent = '刷新中…';
+    refreshAppButton.textContent = '同步中…';
+    const hadPendingUpload = pendingUpload;
     try {
-      if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.getRegistration();
-        if (registration) {
-          await registration.update().catch(() => {});
-          if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      if (pendingUpload) {
+        const uploaded = await uploadState();
+        if (!uploaded && pendingUpload) {
+          throw new Error('本机记录已保留，请稍后再试');
         }
       }
+      const workspace = await fetchWorkspace();
+      if (workspace && workspace.state && typeof workspace.state === 'object' && Object.keys(workspace.state).length) {
+        revision = Number(workspace.revision || revision);
+        applyWorkspace(workspace);
+      }
+      clearPendingUpload();
+      setStatus('已同步', 'ready');
+      return true;
+    } catch (error) {
+      if (hadPendingUpload) markPendingUpload();
+      setLocalStatus();
+      console.error('Manual workspace sync failed:', error);
+      return false;
     } finally {
-      window.location.reload();
+      refreshAppButton.disabled = false;
+      refreshAppButton.textContent = '刷新';
     }
   }
 
-  refreshAppButton.addEventListener('click', refreshInstalledApp);
+  refreshAppButton.addEventListener('click', syncNow);
 
   nameForm.addEventListener('submit', async event => {
     event.preventDefault();
@@ -232,15 +364,22 @@
     nameSave.disabled = true;
     nameSave.textContent = '正在保存…';
     applyName(name);
-    await uploadState();
+    markPendingUpload();
+    setLocalStatus();
     if (pendingAvatar) {
       try {
-        const form = new FormData();
-        form.append('avatar', pendingAvatar, 'avatar.webp');
-        const response = await fetch('/api/avatar', { method: 'POST', body: form });
-        const data = await readJsonResponse(response, '头像上传失败，请稍后再试');
-        if (!response.ok) throw new Error(data.error || '头像上传失败');
-        applyWorkspace(data);
+        if (localOnly) {
+          const localAvatar = await blobToDataUrl(pendingAvatar);
+          localStorage.setItem(LOCAL_AVATAR_KEY, localAvatar);
+          applyAvatar(localAvatar);
+        } else {
+          const form = new FormData();
+          form.append('avatar', pendingAvatar, 'avatar.webp');
+          const response = await fetch('/api/avatar', { method: 'POST', body: form });
+          const data = await readJsonResponse(response, '头像上传失败，请稍后再试');
+          if (!response.ok) throw new Error(data.error || '头像上传失败');
+          applyWorkspace(data);
+        }
       } catch (error) {
         alert(error instanceof Error ? error.message : '头像上传失败');
       }
@@ -288,6 +427,8 @@
   resetWorkspace.addEventListener('click', () => {
     if (!confirm('确定清空当前测试数据，并从第一次打开重新开始吗？')) return;
     localStorage.removeItem('summer-os-minimum-v1');
+    localStorage.removeItem(LOCAL_AVATAR_KEY);
+    if (localOnly) fetch('/api/local/reset', { method: 'POST' }).catch(() => {});
     location.href = '/?fresh=1';
   });
 
@@ -301,13 +442,27 @@
     pairStartButton.disabled = true;
     pairHint.textContent = '正在生成…';
     try {
-      await uploadState();
-      const response = await fetch('/api/pair/start', { method: 'POST' });
-      const data = await response.json();
+      markPendingUpload();
+      await syncNow();
+      const response = await fetch(localOnly ? '/api/local/pair/start' : '/api/pair/start', { method: 'POST' });
+      const data = await readJsonResponse(response, '暂时无法生成同步码，请重新启动工作台后再试');
       if (!response.ok) throw new Error(data.error || '暂时无法生成同步码');
       pairCode.textContent = `${data.code.slice(0, 3)} · ${data.code.slice(3)}`;
       pairCode.hidden = false;
-      pairHint.textContent = '5 分钟有效，用过即失效';
+      if (localOnly && data.lanUrl && window.SummerQr) {
+        try {
+          const joinUrl = data.pairUrl || `${data.lanUrl}?pair=${data.code}`;
+          pairUrl.textContent = joinUrl;
+          window.SummerQr.render(pairQr, joinUrl);
+          pairShare.hidden = false;
+        } catch (error) {
+          pairShare.hidden = true;
+          console.error('QR rendering failed:', error);
+        }
+      }
+      pairHint.textContent = localOnly
+        ? '5 分钟有效。手机直接扫码即可接入这份工作台；如未自动连接，再输入上面的同步码。'
+        : '5 分钟有效，用过即失效';
     } catch (error) {
       pairHint.textContent = error instanceof Error ? error.message : '暂时无法生成同步码';
     } finally {
@@ -319,20 +474,33 @@
     authEmail.value = authEmail.value.replace(/\D/g, '').slice(0, 6);
   });
 
+  copyPairUrl.addEventListener('click', async () => {
+    const value = pairUrl.textContent.trim();
+    if (!value) return;
+    copyPairUrl.disabled = true;
+    try {
+      await copyText(value);
+      copyPairUrl.textContent = '已复制手机地址';
+    } catch (error) {
+      pairHint.textContent = error instanceof Error ? error.message : '复制失败，请长按地址复制';
+    } finally {
+      setTimeout(() => {
+        copyPairUrl.disabled = false;
+        copyPairUrl.textContent = '复制手机地址';
+      }, 1500);
+    }
+  });
+
   authForm.addEventListener('submit', async event => {
     event.preventDefault();
     authSubmit.disabled = true;
     setFeedback('正在连接…');
     try {
-      const response = await fetch('/api/pair/join', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code: authEmail.value })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || '连接失败');
+      const data = await joinWorkspaceByCode(authEmail.value);
       applyWorkspace(data.workspace);
-      setFeedback('连接成功，这台设备会自动同步。');
+      clearPendingUpload();
+      setStatus('已同步', 'ready');
+      setFeedback('连接成功，之后点击“刷新”即可同步。');
       setTimeout(closeAuthModal, 700);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : '连接失败', true);
@@ -342,8 +510,9 @@
   });
 
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-  installButton.hidden = !(isIos && !isStandalone);
+  installButton.hidden = !(isMobile && !isStandalone);
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();
     deferredInstallPrompt = event;
@@ -359,23 +528,14 @@
     } else if (isIos) {
       iosInstallModal.hidden = false;
       iosInstallClose.focus();
+    } else if (isMobile) {
+      iosInstallModal.querySelector('.install-instructions').textContent = '打开浏览器菜单，选择“添加到主屏幕”或“安装应用”，以后直接点击手机桌面图标即可进入。';
+      iosInstallModal.hidden = false;
+      iosInstallClose.focus();
     }
   });
   iosInstallClose.addEventListener('click', () => { iosInstallModal.hidden = true; installButton.focus(); });
   iosInstallModal.addEventListener('click', event => { if (event.target === iosInstallModal) iosInstallClose.click(); });
-
-  setInterval(async () => {
-    if (!initialized || syncing || !navigator.onLine) return;
-    try {
-      const workspace = await fetchWorkspace();
-      if (Number(workspace.revision || 0) > revision) {
-        applyWorkspace(workspace);
-        setStatus('已同步', 'ready');
-      }
-    } catch {
-      // 短暂断网时保留当前页面，下一轮自动重试。
-    }
-  }, 5000);
 
   if (window.SummerOS) initialize();
   else window.addEventListener('summer-os:ready', initialize, { once: true });
