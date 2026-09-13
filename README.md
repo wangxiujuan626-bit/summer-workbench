@@ -1,103 +1,42 @@
-# Summer工作台 Lite
+# Summer 工作台 Lite
 
-面向粉丝公开使用的轻量个人工作台。无需注册即可创建自己的工作台，支持首次改名、今日任务、快速记录、每日复盘、PWA 安装，以及用一次性同步码连接手机和电脑。
+一个纯本地的个人工作台：先记录，再整理。支持随手记录、今日结果、每日经历卡、手机同步、Cola 插件和通用 AI 连接器。
 
-这是一套独立项目，不与 Summer 的私人工作台共享数据或代码发布记录。
+## 粉丝直接使用
 
-公开仓库说明：私有 Sites 部署配置（`.openai/hosting.json`）和个人头像素材没有随本仓库发布。需要部署时，请根据自己的托管平台重新配置；需要头像时，请替换为自己的公开素材。
+请打开 [最新版发布页](https://github.com/wangxiujuan626-bit/summer-workbench/releases/tag/v1.0.1)，在 **Assets** 里只下载：
 
+**summer-workbench-lite-local-lan-fix-20260913.zip**
 
-## Prerequisites
+不要下载仓库首页或发布页里的旧版压缩包，也不要下载 GitHub 自动生成的 Source code (zip)。
 
-- Node.js `>=22.13.0`
+下载后解压：
 
-## Quick Start
+- macOS：双击 start.command。如果系统提示无法验证，右键它，选择“打开”，再选择“打开”。
+- Windows：双击 start.bat。
 
-```bash
-npm install
-npm run dev
-npm run build
-```
+浏览器会自动打开工作台。每个人第一次填写自己的昵称和头像，记录保存在自己的设备上，不需要注册，也不会带入作者的个人数据。
 
-This starter does not use `wrangler.jsonc`.
+## 手机同步
 
-## Included Shape
+电脑和手机连接同一个 Wi‑Fi：
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+1. 电脑打开工作台，点击“连接设备”。
+2. 选择“这台已有内容”，生成二维码。
+3. 手机扫码后直接进入电脑上的工作台。
+4. 以后在任一设备点击“刷新”，同步两台设备的记录。
 
-## Workspace Auth Headers
+## 可选连接 AI
 
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
+工作台本身可以独立使用。压缩包中还包含：
 
-The user ID is stable for the same user on the same Site and different across Sites. Email and name are intended for display or contact purposes.
+- cola-plugin：在 Cola 的“技能 → 渠道 → 安装本地插件”中选择这个文件夹。
+- workbench-connector：连接支持 MCP（模型上下文协议）的其他 AI 工具。
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+## 数据边界
 
-Treat the full name as optional and fall back to email when it is absent:
+这是纯本地版本，不依赖 Cloudflare，不需要云端账号。普通工作记录保存在本地浏览器，不会自动上传，也不会与其他人的数据混在一起。
 
-```tsx
-import { headers } from "next/headers";
+## 开发者
 
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+需要 Node.js >=22.13.0 才能从源码重新打包。源码包和运行包请从上面的最新版发布页下载。
