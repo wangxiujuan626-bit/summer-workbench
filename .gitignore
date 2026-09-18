@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -38,3 +39,12 @@ yarn-error.log*
 /.wrangler/
 /outputs/
 /work/
+/downloads/summer-workbench-local/
+/发布包/*.zip
+/发布包/Summer工作台-Lite/
+/workbench-connector/data/
+**/.summer-workbench-local.json
+**/.summer-workbench-local.json.bak
+**/.summer-workbench-port
+**/workspace.json
+**/workspace.json.bak

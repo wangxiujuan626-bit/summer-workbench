@@ -1,15 +1,18 @@
 (() => {
   const KEY = 'summer-os-minimum-v1';
+  const BACKUP_KEY = 'summer-os-last-good-backup-v1';
+  const STATE_SCHEMA_VERSION = 2;
   const dateKey = () => {
     const date = new Date();
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
   const defaults = {
+    schemaVersion: STATE_SCHEMA_VERSION,
     commitment: '写下今天唯一最重要的结果', nextStep: '写下可以立即开始的第一步', completed: false, captures: [], memoryItems: [], scheduleItems: [],
     date: dateKey(), planDate: dateKey(), mainTaskId: '',
     tasks: [],
-    tomorrow: '', mode: 'flow',
-    plans: [],
+    tomorrow: '', mode: 'flow', dailyReviews: [], colaDeliveryLog: [], aiActionLog: [],
+    plans: [], syncConflicts: [],
     decisions: [], timer: 1500
   };
   const INBOX_PAGE_SIZE = 20;
@@ -22,6 +25,7 @@
   };
   let inboxVisibleLimit = INBOX_PAGE_SIZE;
   let captureMigrationNeeded = false;
+  let recoveredFromBackup = false;
   let state = load();
   let running = false;
   let interval = null;
@@ -32,6 +36,7 @@
   let editingMemoryId = '';
   let pendingScheduleSource = null;
   let pendingImport = null;
+  let pendingReview = null;
   const $ = selector => document.querySelector(selector);
 
   function inferCategory(text) {
@@ -50,10 +55,21 @@
   }
 
   function load() {
+    let saved;
     try {
-      const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+      saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+    } catch {
+      try {
+        const backup = JSON.parse(localStorage.getItem(BACKUP_KEY) || '{}');
+        saved = backup.state || {};
+        recoveredFromBackup = Boolean(Object.keys(saved).length);
+      } catch {
+        saved = {};
+      }
+    }
+    try {
       const rawCaptures = Array.isArray(saved.captures) ? saved.captures : [];
-      const state = { ...structuredClone(defaults), ...saved, tasks: saved.tasks || structuredClone(defaults.tasks), decisions: saved.decisions || structuredClone(defaults.decisions), captures: rawCaptures, memoryItems: Array.isArray(saved.memoryItems) ? saved.memoryItems : [], scheduleItems: Array.isArray(saved.scheduleItems) ? saved.scheduleItems : [], plans: Array.isArray(saved.plans) ? saved.plans : [] };
+      const state = { ...structuredClone(defaults), ...saved, schemaVersion: STATE_SCHEMA_VERSION, tasks: saved.tasks || structuredClone(defaults.tasks), decisions: saved.decisions || structuredClone(defaults.decisions), captures: rawCaptures, memoryItems: Array.isArray(saved.memoryItems) ? saved.memoryItems : [], scheduleItems: Array.isArray(saved.scheduleItems) ? saved.scheduleItems : [], plans: Array.isArray(saved.plans) ? saved.plans : [], dailyReviews: Array.isArray(saved.dailyReviews) ? saved.dailyReviews : [], colaDeliveryLog: Array.isArray(saved.colaDeliveryLog) ? saved.colaDeliveryLog : [], aiActionLog: Array.isArray(saved.aiActionLog) ? saved.aiActionLog : [], syncConflicts: Array.isArray(saved.syncConflicts) ? saved.syncConflicts : [] };
       state.mode = state.mode === 'flow' ? 'flow' : 'planner';
       state.captures = state.captures.map(capture => {
         const item = capture || {};
@@ -69,9 +85,25 @@
       if (rollover.rolledOver) localStorage.setItem(KEY, JSON.stringify(state));
       return state;
     }
-    catch { return structuredClone(defaults); }
+    catch {
+      return structuredClone(defaults);
+    }
+  }
+  function backupLocalState(reason = 'before-save') {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return false;
+      const previous = JSON.parse(raw);
+      localStorage.setItem(BACKUP_KEY, JSON.stringify({ version: 1, reason, savedAt: new Date().toISOString(), state: previous }));
+      return true;
+    } catch (error) {
+      console.warn('Local state backup failed:', error);
+      return false;
+    }
   }
   function save(options = {}) {
+    backupLocalState(options.remote ? 'before-remote-apply' : 'before-local-save');
+    state.schemaVersion = STATE_SCHEMA_VERSION;
     localStorage.setItem(KEY, JSON.stringify(state));
     if (!options.remote) {
       const event = new CustomEvent('summer-os:state-saved', { detail: state });
@@ -203,10 +235,11 @@
     const todayTasks = state.tasks.filter(task => task.date === dateKey());
     const visibleTasks = state.tasks.filter(task => task.date === state.planDate);
     const done = todayTasks.filter(task => task.done).length;
-    $('#closeSummary').textContent = state.tomorrow ? `明天第一步：${state.tomorrow}` : `今天完成 ${done}/${todayTasks.length || 0}，结束前确认明天第一步。`;
+    const review = state.dailyReviews.find(item => item.date === dateKey());
+    $('#closeSummary').textContent = review ? `今日经历卡已保存${review.sentToCola ? ' · 已交给 Cola' : ''} · 明天第一步：${review.tomorrow || '未填写'}` : state.tomorrow ? `明天第一步：${state.tomorrow}` : `今天完成 ${done}/${todayTasks.length || 0}，结束前整理一张今日经历卡。`;
     $('#planDate').value = state.planDate;
     const [, month, day] = state.planDate.split('-');
-    const dateLabel = state.planDate === dateKey() ? '今日执行流' : `${Number(month)}月${Number(day)}日的安排`;
+      const dateLabel = state.planDate === dateKey() ? '今日执行流' : `${Number(month)}月${Number(day)}日的安排`;
     $('#planTitle').textContent = dateLabel;
     $('#addTaskButton').hidden = false;
     const ordered = [...visibleTasks].sort((a, b) => Number(a.done) - Number(b.done));
@@ -383,6 +416,10 @@
     lines.push('## 可复用资料', '');
     if (!state.memoryItems.length) lines.push('暂时没有可复用资料。', '');
     state.memoryItems.forEach(item => lines.push(`### ${markdownText(item.title)}`, ``, markdownText(item.content), ``));
+    lines.push('## AI 结果', '');
+    const aiResults = state.memoryItems.filter(item => item.source === 'ai');
+    if (!aiResults.length) lines.push('暂时没有 AI 回写结果。', '');
+    aiResults.forEach(item => lines.push(`- ${markdownText(item.title)}：${markdownText(item.content)}`, ''));
     return lines.join('\n');
   }
   function downloadMarkdown() {
@@ -550,7 +587,7 @@
     save();
     closeImportModal();
     render();
-    toast(total ? `已导入 ${total} 条记录，正在同步。` : '这些记录已经存在，没有新增内容。');
+    toast(total ? `已导入 ${total} 条记录，点击“刷新”同步。` : '这些记录已经存在，没有新增内容。');
   });
   async function openObsidian() {
     const markdown = buildWorkbenchMarkdown();
@@ -638,6 +675,71 @@
     save();
     renderMode();
     toast(state.mode === 'flow' ? '已进入随手模式，先记录，不提醒。' : '已回到计划模式。');
+  });
+  $('#colaButton').addEventListener('click', async () => {
+    const button = $('#colaButton');
+    button.disabled = true;
+    button.textContent = '检测 Cola…';
+    try {
+      if (!window.SummerCola) throw new Error('本机连接模块没有加载，请重新打开工作台。');
+      await window.SummerCola.check();
+      button.textContent = 'Cola 已连接';
+      toast('Cola 已连接。结束今天时，确认后即可送入主对话。');
+    } catch (error) {
+      button.textContent = '连接 Cola';
+      toast(error instanceof Error ? error.message : '没有连接到 Cola，请先安装并启动插件。');
+    } finally {
+      button.disabled = false;
+    }
+  });
+  const aiConnectorModal = $('#aiConnectorModal');
+  const aiConnectorFeedback = $('#aiConnectorFeedback');
+  const aiConnectorCheck = $('#aiConnectorCheck');
+  async function checkAiConnector() {
+    aiConnectorCheck.disabled = true;
+    aiConnectorCheck.textContent = '检测中…';
+    try {
+      if (!window.SummerAIConnector) throw new Error('通用 AI 连接器模块没有加载，请重新打开工作台。');
+      await window.SummerAIConnector.check();
+      $('#aiConnectorButton').textContent = 'AI 已连接';
+      aiConnectorFeedback.textContent = '连接器已启动。现在把标准配置添加到支持 MCP 的 AI 工具即可。';
+      toast('通用 AI 连接器已连接。');
+    } catch (error) {
+      $('#aiConnectorButton').textContent = 'AI 连接器';
+      aiConnectorFeedback.textContent = error instanceof Error ? error.message : '没有连接到通用 AI 连接器。';
+      aiConnectorFeedback.classList.add('error');
+    } finally {
+      aiConnectorCheck.disabled = false;
+      aiConnectorCheck.textContent = '检测连接器';
+    }
+  }
+  $('#aiConnectorButton').addEventListener('click', () => {
+    aiConnectorFeedback.textContent = '';
+    aiConnectorFeedback.classList.remove('error');
+    aiConnectorModal.hidden = false;
+    checkAiConnector();
+  });
+  $('#aiConnectorClose').addEventListener('click', () => { aiConnectorModal.hidden = true; });
+  aiConnectorModal.addEventListener('click', event => { if (event.target === aiConnectorModal) aiConnectorModal.hidden = true; });
+  aiConnectorCheck.addEventListener('click', checkAiConnector);
+  $('#aiConnectorCopy').addEventListener('click', async () => {
+    const config = JSON.stringify({
+      mcpServers: {
+        'summer-workbench': {
+          command: 'node',
+          args: ['/你的完整路径/Summer工作台-Lite/workbench-connector/src/mcp-server.mjs'],
+          cwd: '/你的完整路径/Summer工作台-Lite/workbench-connector'
+        }
+      }
+    }, null, 2);
+    try {
+      await navigator.clipboard.writeText(config);
+      aiConnectorFeedback.classList.remove('error');
+      aiConnectorFeedback.textContent = '标准配置已复制。把“你的完整路径”替换成解压后的实际路径，再粘贴到 AI 的 MCP 设置。';
+    } catch {
+      aiConnectorFeedback.classList.add('error');
+      aiConnectorFeedback.textContent = config;
+    }
   });
   $('#captureInput').addEventListener('input', renderCaptureAssist);
   $('#voiceCaptureButton').addEventListener('click', () => {
@@ -1116,11 +1218,177 @@
     state.decisions = state.decisions.filter(decision => decision.id !== id);
     save(); render();
   });
-  $('#closeDayButton').addEventListener('click', () => { $('#closeDayButton').hidden = true; $('#closeDayForm').hidden = false; $('#tomorrowInput').value = state.tomorrow; $('#tomorrowInput').focus(); });
-  $('#cancelClose').addEventListener('click', () => { $('#closeDayForm').hidden = true; $('#closeDayButton').hidden = false; });
-  $('#closeDayForm').addEventListener('submit', event => {
-    event.preventDefault(); state.tomorrow = $('#tomorrowInput').value.trim(); save({ immediate: true }); renderToday();
-    $('#closeDayForm').hidden = true; $('#closeDayButton').hidden = false; toast('今天已收好，明天第一步已留下。');
+  function collectTodayFacts() {
+    const today = dateKey();
+    const completedTasks = state.tasks.filter(task => task.date === today && task.done);
+    const unfinishedTasks = state.tasks.filter(task => task.date === today && !task.done);
+    const todayCaptures = state.captures.filter(item => item.createdAt?.startsWith(today));
+    const categoryCounts = todayCaptures.reduce((counts, item) => {
+      const category = normalizedCaptureCategory(item.category, item.text);
+      counts[category] = (counts[category] || 0) + 1;
+      return counts;
+    }, {});
+    const repeatedThemes = Object.entries(categoryCounts)
+      .filter(([, count]) => count > 1)
+      .sort((a, b) => b[1] - a[1])
+      .map(([category, count]) => `${inboxCategoryLabel(category)}（${count}条）`);
+    const facts = [
+      `今天唯一最重要的结果：${state.commitment || '今天还没有写下唯一结果'}`,
+      `完成了：${completedTasks.length ? completedTasks.map(task => task.title).join('、') : '今天暂时没有标记完成的任务'}`,
+      `没完成：${unfinishedTasks.length ? unfinishedTasks.map(task => task.title).join('、') : '今天没有遗留任务'}`,
+      `新增判断：${state.decisions.length ? state.decisions.slice(0, 3).map(item => item.question).join('、') : '今天没有新增待判断事项'}`,
+      `收件箱反复出现的主题：${repeatedThemes.length ? repeatedThemes.join('、') : '今天没有明显重复主题'}`,
+      `明天第一步：${$('#tomorrowInput').value.trim() || state.tomorrow || '还没有填写'}`,
+    ];
+    return { facts, completedTasks, unfinishedTasks, repeatedThemes };
+  }
+
+  function detectContentSignals(feeling, why, facts) {
+    const text = [feeling, why, ...facts].join(' ');
+    const signals = [];
+    if (facts.some(fact => fact.startsWith('完成了：') && !fact.endsWith('没有标记完成的任务'))) signals.push('有结果');
+    if (/原来|后来|发现|意识到|没想到|其实|转而|变化/.test(text)) signals.push('有转折');
+    if (/卡点|但是|冲突|不一致|不同|问题|拒绝|困难|纠结|拉扯/.test(text)) signals.push('有冲突');
+    if (feeling.trim() || /开心|压力|失望|意外|释然|焦虑|兴奋|生气|难受|感动|惊喜/.test(text)) signals.push('有情绪');
+    return signals;
+  }
+
+  function buildDailyReview() {
+    const existing = state.dailyReviews.find(item => item.date === dateKey());
+    const facts = collectTodayFacts();
+    const feeling = $('#reflectionInput').value.trim();
+    const why = $('#reflectionWhyInput').value.trim();
+    return {
+      id: existing?.id || `review-${dateKey()}`,
+      date: dateKey(),
+      facts: facts.facts,
+      feeling,
+      why,
+      tomorrow: $('#tomorrowInput').value.trim(),
+      privateNotes: $('#privateNotesInput').value.trim(),
+      signals: detectContentSignals(feeling, why, facts.facts),
+      sentToCola: Boolean(existing?.sentToCola),
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  function renderExperienceCardPreview() {
+    pendingReview = buildDailyReview();
+    $('#experienceCardPreview').hidden = false;
+    $('#experienceCardPreview').innerHTML = `<strong>今日经历卡预览</strong><p>${escapeHtml(pendingReview.facts.join('\n')).replace(/\n/g, '<br>')}</p><p><b>有感觉的一刻：</b>${escapeHtml(pendingReview.feeling || '今天跳过')}</p><p><b>为什么在意：</b>${escapeHtml(pendingReview.why || '今天跳过')}</p><p><b>内容信号：</b>${escapeHtml(pendingReview.signals.length ? pendingReview.signals.join('、') : '暂未识别')}</p>`;
+    $('#sendReviewToColaButton').disabled = pendingReview.sentToCola;
+    $('#sendReviewToColaButton').textContent = pendingReview.sentToCola ? '已交给 Cola' : '交给 Cola';
+  }
+
+  function renderDayReviewFacts() {
+    const facts = collectTodayFacts().facts;
+    $('#experienceFacts').innerHTML = `<span>工作台自动汇总</span><ul>${facts.map(fact => `<li>${escapeHtml(fact)}</li>`).join('')}</ul>`;
+  }
+
+  function openDayReview() {
+    const existing = state.dailyReviews.find(item => item.date === dateKey());
+    $('#reflectionInput').value = existing?.feeling || '';
+    $('#reflectionWhyInput').value = existing?.why || '';
+    $('#tomorrowInput').value = existing?.tomorrow || state.tomorrow || '';
+    $('#privateNotesInput').value = existing?.privateNotes || '';
+    $('#colaConsentInput').checked = false;
+    $('#colaReviewStatus').textContent = existing?.sentToCola ? '这张经历卡已经发送过，避免重复进入 Cola。' : '';
+    renderDayReviewFacts();
+    renderExperienceCardPreview();
+    $('#dayReviewModal').hidden = false;
+    document.body.classList.add('modal-open');
+    setTimeout(() => $('#reflectionInput').focus(), 0);
+  }
+
+  function closeDayReview() {
+    $('#dayReviewModal').hidden = true;
+    pendingReview = null;
+    syncModalOpenState();
+  }
+
+  function saveDailyReview(review, sentToCola = false) {
+    review.sentToCola = sentToCola || review.sentToCola;
+    state.tomorrow = review.tomorrow;
+    state.dailyReviews = state.dailyReviews.filter(item => item.date !== review.date);
+    state.dailyReviews.push(review);
+    save({ immediate: true });
+    renderToday();
+  }
+
+  async function sendReviewToCola(review) {
+    if (review.sentToCola || state.colaDeliveryLog.some(item => item.id === review.id)) {
+      $('#colaReviewStatus').textContent = '这张经历卡已经发送过，不会重复发送。';
+      return false;
+    }
+    try {
+      $('#sendReviewToColaButton').disabled = true;
+      $('#sendReviewToColaButton').textContent = '正在连接 Cola…';
+      await window.SummerCola.check();
+      const safeCard = { ...review };
+      delete safeCard.privateNotes;
+      await window.SummerCola.deliver(safeCard);
+      state.colaDeliveryLog.push({ id: review.id, deliveredAt: new Date().toISOString() });
+      saveDailyReview(review, true);
+      $('#colaReviewStatus').textContent = '已送进 Cola 主对话，去 Cola 查看觉知更新和 3 个选题。';
+      $('#sendReviewToColaButton').textContent = '已交给 Cola';
+      toast('今日经历卡已交给 Cola。');
+      return true;
+    } catch (error) {
+      $('#colaReviewStatus').textContent = error instanceof Error ? error.message : '没有连接到 Cola，请先安装并启动插件。';
+      $('#sendReviewToColaButton').disabled = false;
+      $('#sendReviewToColaButton').textContent = '交给 Cola';
+      return false;
+    }
+  }
+
+  function applyConnectorAction(action) {
+    if (!action?.id || !action?.type || !action.payload) return { accepted: false };
+    state.aiActionLog = Array.isArray(state.aiActionLog) ? state.aiActionLog : [];
+    if (state.aiActionLog.includes(action.id)) return { accepted: false, duplicate: true };
+    const payload = action.payload;
+    const createdAt = action.createdAt || new Date().toISOString();
+    if (action.type === 'capture' || action.type === 'task-draft') {
+      const title = action.type === 'task-draft'
+        ? `（AI待确认）${String(payload.title || '').trim()}${payload.nextStep ? `：${String(payload.nextStep).trim()}` : ''}`
+        : String(payload.text || '').trim();
+      if (!title) return { accepted: false };
+      state.captures.push({ id: `ai-${action.id}`, type: 'task', text: title, category: normalizedCaptureCategory(payload.category, title), createdAt });
+    } else if (action.type === 'ai-result') {
+      const title = String(payload.title || '').trim();
+      const content = String(payload.content || '').trim();
+      if (!title || !content) return { accepted: false };
+      state.memoryItems.push({ id: `ai-${action.id}`, title, content, type: 'review', source: 'ai', sourceName: payload.source || 'AI 工具', createdAt });
+    } else {
+      return { accepted: false };
+    }
+    state.aiActionLog.push(action.id);
+    state.aiActionLog = state.aiActionLog.slice(-500);
+    save();
+    render();
+    toast(action.type === 'ai-result' ? 'AI 结果已保存到工作台。' : 'AI 内容已放进收件箱，等你确认整理。');
+    return { accepted: true };
+  }
+
+  $('#closeDayButton').addEventListener('click', openDayReview);
+  $('#dayReviewClose').addEventListener('click', closeDayReview);
+  $('#dayReviewModal').addEventListener('click', event => { if (event.target === $('#dayReviewModal')) closeDayReview(); });
+  $('#cancelClose').addEventListener('click', closeDayReview);
+  ['reflectionInput', 'reflectionWhyInput', 'tomorrowInput'].forEach(id => $(`#${id}`).addEventListener('input', renderExperienceCardPreview));
+  $('#saveReviewButton').addEventListener('click', () => {
+    const review = buildDailyReview();
+    saveDailyReview(review);
+    closeDayReview();
+    toast('今日经历卡已保存到本机。');
+  });
+  $('#closeDayForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!$('#colaConsentInput').checked) {
+      $('#colaReviewStatus').textContent = '请先勾选确认，或点击“只保存到本地”。';
+      return;
+    }
+    pendingReview = buildDailyReview();
+    await sendReviewToCola(pendingReview);
   });
 
   function openMemoryForm(item = null) {
@@ -1205,6 +1473,60 @@
 
   window.SummerOS = {
     getState() { return structuredClone(state); },
+    applyConnectorAction,
+    getDailyExperienceCard() {
+      const safeCard = buildDailyReview();
+      delete safeCard.privateNotes;
+      return structuredClone(safeCard);
+    },
+    getSyncConflictCount() {
+      return Array.isArray(state.syncConflicts) ? state.syncConflicts.length : 0;
+    },
+    mergeRemoteState(remoteState, localState = state) {
+      if (!remoteState || typeof remoteState !== 'object' || Array.isArray(remoteState)) return structuredClone(localState);
+      const conflicts = [
+        ...(Array.isArray(remoteState.syncConflicts) ? remoteState.syncConflicts : []),
+        ...(Array.isArray(localState.syncConflicts) ? localState.syncConflicts : [])
+      ];
+      const mergeCollection = (remoteItems, localItems) => {
+        const localById = new Map((Array.isArray(localItems) ? localItems : []).map(item => [String(item?.id), item]));
+        const merged = (Array.isArray(remoteItems) ? remoteItems : []).map(item => {
+          const localItem = localById.get(String(item?.id));
+          if (localItem && JSON.stringify(localItem) !== JSON.stringify(item)) {
+            conflicts.push({
+              id: String(item?.id),
+              collection: 'workspace-items',
+              detectedAt: new Date().toISOString(),
+              local: structuredClone(localItem),
+              remote: structuredClone(item)
+            });
+          }
+          return localItem || item;
+        });
+        const remoteIds = new Set((Array.isArray(remoteItems) ? remoteItems : []).map(item => String(item?.id)));
+        (Array.isArray(localItems) ? localItems : []).forEach(item => {
+          if (!remoteIds.has(String(item?.id))) merged.push(item);
+        });
+        return structuredClone(merged);
+      };
+      const merged = {
+        ...structuredClone(remoteState),
+        ...structuredClone(localState),
+        schemaVersion: STATE_SCHEMA_VERSION,
+      };
+      ['tasks', 'decisions', 'captures', 'memoryItems', 'scheduleItems', 'plans', 'dailyReviews', 'colaDeliveryLog'].forEach(key => {
+        merged[key] = mergeCollection(remoteState[key], localState[key]);
+      });
+      merged.aiActionLog = [...new Set([...(Array.isArray(remoteState.aiActionLog) ? remoteState.aiActionLog : []), ...(Array.isArray(localState.aiActionLog) ? localState.aiActionLog : [])])].slice(-500);
+      const uniqueConflicts = new Map();
+      conflicts.forEach(conflict => {
+        if (!conflict || !conflict.id) return;
+        const key = `${conflict.collection || 'workspace-items'}:${conflict.id}:${JSON.stringify(conflict.local)}:${JSON.stringify(conflict.remote)}`;
+        uniqueConflicts.set(key, conflict);
+      });
+      merged.syncConflicts = [...uniqueConflicts.values()].slice(-50);
+      return merged;
+    },
     applyRemoteState(remoteState) {
       if (!remoteState || typeof remoteState !== 'object' || Array.isArray(remoteState)) return false;
       state = {
@@ -1215,7 +1537,12 @@
         captures: Array.isArray(remoteState.captures) ? structuredClone(remoteState.captures) : [],
         memoryItems: Array.isArray(remoteState.memoryItems) ? structuredClone(remoteState.memoryItems) : [],
         scheduleItems: Array.isArray(remoteState.scheduleItems) ? structuredClone(remoteState.scheduleItems) : [],
-        plans: Array.isArray(remoteState.plans) ? structuredClone(remoteState.plans) : []
+        plans: Array.isArray(remoteState.plans) ? structuredClone(remoteState.plans) : [],
+        dailyReviews: Array.isArray(remoteState.dailyReviews) ? structuredClone(remoteState.dailyReviews) : [],
+        colaDeliveryLog: Array.isArray(remoteState.colaDeliveryLog) ? structuredClone(remoteState.colaDeliveryLog) : [],
+        aiActionLog: Array.isArray(remoteState.aiActionLog) ? structuredClone(remoteState.aiActionLog) : [],
+        syncConflicts: Array.isArray(remoteState.syncConflicts) ? structuredClone(remoteState.syncConflicts) : [],
+        schemaVersion: STATE_SCHEMA_VERSION
       };
       state.captures = state.captures.map(capture => ({ ...capture, category: normalizedCaptureCategory(capture.category, capture.text) }));
       state.mode = state.mode === 'flow' ? 'flow' : 'planner';
@@ -1236,4 +1563,7 @@
     }
   };
   window.dispatchEvent(new Event('summer-os:ready'));
+  if (recoveredFromBackup) {
+    setTimeout(() => toast('已从上一份安全备份恢复记录，请先点击“刷新”同步。'), 300);
+  }
 })();

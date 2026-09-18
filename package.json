@@ -1,6 +1,6 @@
 {
   "name": "summer-workbench-lite",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -11,6 +11,7 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "package:offline": "node scripts/package-offline.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

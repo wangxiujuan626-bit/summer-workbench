@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7efd9">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="no">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>我的工作台 · 今日</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -19,14 +19,22 @@
       <a class="brand" href="#today" aria-label="个人工作台今日首页"><span id="brandInitial">S</span><b id="workspaceName">MY OS</b></a>
       <div class="topbar-actions">
         <div class="sync-state" id="syncState" role="status"><i aria-hidden="true"></i><span>本地模式</span></div>
-        <button class="utility-button refresh-button" id="refreshAppButton" type="button">刷新</button>
-        <button class="utility-button" id="installButton" type="button" hidden>安装应用</button>
+        <button class="utility-button refresh-button" id="refreshAppButton" type="button" title="同步电脑和手机上的工作台数据">刷新</button>
+        <button class="utility-button" id="installButton" type="button" hidden>添加到手机桌面</button>
         <button class="utility-button mode-button" id="modeButton" type="button" aria-pressed="false">随手模式</button>
         <button class="utility-button" id="profileButton" type="button">个人设置</button>
+        <button class="utility-button" id="colaButton" type="button">连接 Cola</button>
+        <button class="utility-button" id="aiConnectorButton" type="button">AI 连接器</button>
         <button class="utility-button" id="accountButton" type="button">连接设备</button>
         <div class="day-state"><span id="todayLabel"></span><i aria-hidden="true"></i><strong id="dayState">准备今天</strong></div>
       </div>
     </header>
+
+    <aside class="update-notice" id="updateNotice" hidden role="status">
+      <span id="updateNoticeText">发现新的工作台版本。</span>
+      <button class="text-action" id="updateOpenButton" type="button">查看并下载</button>
+      <button class="update-dismiss" id="updateDismissButton" type="button" aria-label="暂不提醒">×</button>
+    </aside>
 
     <section id="today" class="commitment" aria-labelledby="commitmentTitle">
       <div class="section-kicker"><span>TODAY'S RESULT</span><span>01</span></div>
@@ -40,8 +48,8 @@
             <button class="text-button" id="completeCommitment" type="button">标记完成</button>
           </div>
         </div>
-        <div class="commitment-avatar-wrap" onerror="this.style.display='none'">
-          <img class="commitment-avatar" id="workspaceAvatar" src="/avatar.png" alt="我的个人头像" width="181" height="520">
+        <div class="commitment-avatar-wrap">
+          <img class="commitment-avatar" id="workspaceAvatar" src="/avatar-default.svg" alt="默认头像" width="181" height="520">
           <div class="avatar-ground-shadow" aria-hidden="true"></div>
         </div>
       </div>
@@ -133,9 +141,8 @@
     </section>
 
     <section class="day-close" aria-labelledby="closeTitle">
-      <div><span>END OF DAY</span><h2 id="closeTitle">给明天留下一个清楚的开局。</h2><p id="closeSummary">今天完成 0/0，结束前确认明天第一步。</p></div>
+      <div><span>END OF DAY</span><h2 id="closeTitle">把今天留下来，再交给 Cola。</h2><p id="closeSummary">今天完成 0/0，结束前整理一张今日经历卡。</p></div>
       <button class="button dark" id="closeDayButton" type="button">结束今天</button>
-      <form id="closeDayForm" hidden><input id="tomorrowInput" maxlength="100" placeholder="明天打开电脑后的第一步" required><button class="button primary" type="submit">保存</button><button class="button quiet" id="cancelClose" type="button">取消</button></form>
     </section>
 
     <section id="workRadar" class="panel work-radar" aria-labelledby="radarTitle">
@@ -276,9 +283,15 @@
         <button id="pairJoinTab" type="button">这台是新设备</button>
       </div>
       <div id="pairStartPanel">
-        <ol class="pair-steps"><li>在另一台设备打开这个工作台</li><li>点击“连接设备”</li><li>输入这里生成的 6 位同步码</li></ol>
+        <ol class="pair-steps"><li>手机直接扫描下面的二维码</li><li>手机会自动接入这份工作台</li><li>如果在微信里不能添加到桌面，复制地址栏里的完整网址到 Safari 或 Chrome</li><li>普通浏览器接入成功后，再点击“添加到手机桌面”</li></ol>
         <button class="button primary" id="pairStartButton" type="button">生成一次性同步码</button>
         <div class="pair-code" id="pairCode" hidden></div>
+        <div class="pair-share" id="pairShare" hidden>
+          <strong>手机扫码进入</strong>
+          <canvas id="pairQr" width="264" height="264"></canvas>
+          <code id="pairUrl"></code>
+          <button class="button quiet" id="copyPairUrl" type="button">复制手机地址</button>
+        </div>
         <small class="pair-hint" id="pairHint"></small>
       </div>
       <form id="authForm" hidden>
@@ -291,17 +304,35 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="aiConnectorModal" hidden>
+    <section class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="aiConnectorTitle">
+      <button class="modal-close" id="aiConnectorClose" type="button" aria-label="关闭 AI 连接器说明">×</button>
+      <p class="modal-kicker">AI × WORKBENCH</p>
+      <h2 id="aiConnectorTitle">连接其他 AI</h2>
+      <p>其他 AI 没有统一的“插件渠道”，所以只需配置一次 MCP，之后就像 Cola 一样读取和回写工作台。</p>
+      <ol class="pair-steps">
+        <li>确认已安装 Node.js，并保持本地工作台启动。</li>
+        <li>在支持 MCP 的 AI 设置里添加工作台连接器。</li>
+        <li>连接成功后，AI 可以读取记录、接收灵感、保存结果。</li>
+      </ol>
+      <button class="button primary" id="aiConnectorCheck" type="button">检测连接器</button>
+      <button class="button quiet" id="aiConnectorCopy" type="button">复制标准配置</button>
+      <p class="auth-feedback" id="aiConnectorFeedback" aria-live="polite"></p>
+      <small>配置命令：node workbench-connector/src/mcp-server.mjs</small>
+    </section>
+  </div>
+
   <div class="modal-backdrop" id="nameModal" hidden>
     <section class="auth-modal name-modal" role="dialog" aria-modal="true" aria-labelledby="nameTitle">
       <button class="modal-close" id="nameClose" type="button" aria-label="关闭个人设置">×</button>
       <p class="modal-kicker">WELCOME TO YOUR OS</p>
       <h2 id="nameTitle">设置你的名字和头像</h2>
-      <p>名字和头像可以随时更换，并同步到你连接的设备。</p>
+      <p>名字和头像可以随时更换，点击刷新后同步到你连接的设备。</p>
       <form id="nameForm">
         <label for="nameInput">你的名字或昵称</label>
         <input id="nameInput" maxlength="16" placeholder="例如：小雨、Cherry、王同学" required>
         <label class="avatar-picker" for="avatarInput">
-          <img id="avatarPreview" src="/avatar.png" alt="头像预览">
+          <img id="avatarPreview" src="/avatar-default.svg" alt="默认头像预览">
           <span><b>更换头像</b><small>支持 JPG、PNG，选择后会自动裁成正方形</small></span>
         </label>
         <input class="sr-only" id="avatarInput" type="file" accept="image/jpeg,image/png,image/webp">
@@ -311,12 +342,40 @@
     </section>
   </div>
 
+  <div class="modal-backdrop" id="dayReviewModal" hidden>
+    <section class="auth-modal day-review-modal" role="dialog" aria-modal="true" aria-labelledby="dayReviewTitle">
+      <button class="modal-close" id="dayReviewClose" type="button" aria-label="关闭今日经历">×</button>
+      <p class="modal-kicker">END OF DAY × COLA</p>
+      <h2 id="dayReviewTitle">把今天变成一张经历卡</h2>
+      <p class="modal-description">事实由工作台自动整理，你只补两句真实感受。确认后才会发送给 Cola。</p>
+      <div class="experience-facts" id="experienceFacts" aria-live="polite"></div>
+      <form id="closeDayForm">
+        <label for="reflectionInput">今天哪件事最让我有感觉？</label>
+        <textarea id="reflectionInput" rows="2" maxlength="240" placeholder="可以跳过，也可以按住语音说十几秒"></textarea>
+        <label for="reflectionWhyInput">我为什么在意？</label>
+        <textarea id="reflectionWhyInput" rows="2" maxlength="240" placeholder="因为它让我发现…… / 因为这件事关系到……"></textarea>
+        <label for="tomorrowInput">明天第一步</label>
+        <input id="tomorrowInput" maxlength="100" placeholder="明天打开电脑后的第一步">
+        <label for="privateNotesInput">不发送给 Cola 的内容</label>
+        <textarea id="privateNotesInput" rows="2" maxlength="240" placeholder="例如：客户姓名、报价、未公开数据。只保存在本机。"></textarea>
+        <label class="consent-check"><input id="colaConsentInput" type="checkbox"> <span>我确认下面这张经历卡可以发送给 Cola</span></label>
+        <div class="experience-card-preview" id="experienceCardPreview" hidden></div>
+        <div class="form-actions">
+          <button class="button quiet" id="cancelClose" type="button">取消</button>
+          <button class="button quiet" id="saveReviewButton" type="button">只保存到本地</button>
+          <button class="button primary" id="sendReviewToColaButton" type="submit">交给 Cola</button>
+        </div>
+        <p class="cola-review-status" id="colaReviewStatus" role="status"></p>
+      </form>
+    </section>
+  </div>
+
   <div class="modal-backdrop" id="iosInstallModal" hidden>
     <section class="auth-modal install-modal" role="dialog" aria-modal="true" aria-labelledby="iosInstallTitle">
       <button class="modal-close" id="iosInstallClose" type="button" aria-label="关闭">×</button>
       <p class="modal-kicker">INSTALL</p>
       <h2 id="iosInstallTitle">添加到主屏幕</h2>
-      <p>在 Safari 中点击“分享”，然后选择“添加到主屏幕”。</p>
+      <p class="install-instructions">请在当前浏览器中点击“分享”或浏览器菜单，再选择“添加到主屏幕”。不要切换浏览器，否则会打开新的工作台。</p>
     </section>
   </div>
 
@@ -341,7 +400,10 @@
     }
   </script>
   <script src="/day-rollover.js"></script>
+  <script src="/cola.js"></script>
+  <script src="/qr.js"></script>
   <script src="/app.js"></script>
+  <script src="/ai-connector.js"></script>
   <script src="/sync.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

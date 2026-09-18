@@ -1,0 +1,11 @@
+{
+  "version": "1.1.0",
+  "build": "2026-09-18.1",
+  "downloadUrl": "https://github.com/wangxiujuan626-bit/summer-workbench/blob/main/Summer%E5%B7%A5%E4%BD%9C%E5%8F%B0-Lite.zip",
+  "packageUrl": "https://raw.githubusercontent.com/wangxiujuan626-bit/summer-workbench/main/Summer%E5%B7%A5%E4%BD%9C%E5%8F%B0-Lite.zip",
+  "notes": [
+    "同步前自动保留上一份本机备份",
+    "双设备冲突不再静默覆盖",
+    "手机桌面入口继续使用同一个浏览器的数据"
+  ]
+}

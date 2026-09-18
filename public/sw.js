@@ -1,5 +1,5 @@
-const CACHE = "summer-workbench-lite-v6";
-const SHELL = ["/", "/styles.css", "/day-rollover.js", "/app.js", "/sync.js", "/avatar.png", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+const CACHE = "summer-workbench-lite-v16";
+const SHELL = ["/", "/styles.css", "/day-rollover.js", "/cola.js", "/qr.js", "/ai-connector.js", "/app.js", "/sync.js", "/avatar-default.svg", "/manifest.webmanifest", "/update.json", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));

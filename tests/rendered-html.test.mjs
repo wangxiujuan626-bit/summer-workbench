@@ -6,11 +6,16 @@ import vm from "node:vm";
 const root = new URL("../", import.meta.url);
 
 test("fan edition keeps its core product flows", async () => {
-  const [page, layout, manifest, appScript] = await Promise.all([
+  const [page, layout, manifest, appScript, aiConnectorScript, colaScript, colaPackage, colaDist, qrScript] = await Promise.all([
     readFile(new URL("app/workbench.html", root), "utf8"),
     readFile(new URL("app/layout.tsx", root), "utf8"),
     readFile(new URL("public/manifest.webmanifest", root), "utf8"),
     readFile(new URL("public/app.js", root), "utf8"),
+    readFile(new URL("public/ai-connector.js", root), "utf8"),
+    readFile(new URL("public/cola.js", root), "utf8"),
+    readFile(new URL("cola-plugin/package.json", root), "utf8"),
+    readFile(new URL("cola-plugin/dist/index.js", root), "utf8"),
+    readFile(new URL("public/qr.js", root), "utf8"),
   ]);
   assert.match(layout, /Summer工作台 Lite/);
   assert.match(page, /设置你的名字和头像/);
@@ -31,6 +36,25 @@ test("fan edition keeps its core product flows", async () => {
   assert.match(page, /id="mobileBottomNav"/);
   assert.match(page, /id="exportMarkdownButton"/);
   assert.match(page, /id="openObsidianButton"/);
+  assert.match(page, /id="colaButton"/);
+  assert.match(page, /id="aiConnectorButton"/);
+  assert.match(page, /id="pairQr"/);
+  assert.match(page, /id="copyPairUrl"/);
+  assert.match(page, /复制地址栏里的完整网址到 Safari 或 Chrome/);
+  assert.match(page, /<script src="\/qr\.js"><\/script>/);
+  assert.match(page, /\/ai-connector\.js/);
+  assert.match(page, /id="dayReviewModal"/);
+  assert.match(page, /id="experienceCardPreview"/);
+  assert.match(page, /交给 Cola/);
+  assert.match(appScript, /function buildDailyReview/);
+  assert.match(appScript, /getDailyExperienceCard/);
+  assert.match(appScript, /colaDeliveryLog/);
+  assert.match(appScript, /BACKUP_KEY/);
+  assert.match(appScript, /syncConflicts/);
+  assert.match(appScript, /getSyncConflictCount/);
+  assert.match(appScript, /aiActionLog/);
+  assert.match(appScript, /applyConnectorAction/);
+  assert.match(appScript, /dailyReviews/);
   assert.match(page, /\/day-rollover\.js/);
   assert.match(page, /id="taskEditModal"/);
   assert.match(page, /修改任务/);
@@ -56,10 +80,23 @@ test("fan edition keeps its core product flows", async () => {
   assert.match(appScript, /function buildWorkbenchMarkdown/);
   assert.match(appScript, /obsidian:\/\/new/);
   assert.match(appScript, /data-mobile-tab/);
-  assert.match(appScript, /state\.tomorrow = .*save\(\{ immediate: true \}\)/);
+  assert.equal((page.match(/data-mobile-tab=/g) || []).length, 3);
+  assert.match(appScript, /state\.tomorrow = review\.tomorrow/);
   assert.match(appScript, /data-decide-action[\s\S]*?state\.decisions = state\.decisions\.filter\(decision => decision\.id !== id\)/);
   assert.match(appScript, /下一条切换为/);
-  assert.equal(JSON.parse(manifest).display, "standalone");
+  assert.match(colaScript, /127\.0\.0\.1:43127/);
+  assert.match(colaScript, /daily-experience/);
+  assert.match(aiConnectorScript, /127\.0\.0\.1:43128/);
+  assert.match(aiConnectorScript, /privateNotes/);
+  assert.match(qrScript, /SummerQr/);
+  assert.equal(JSON.parse(colaPackage).cola.plugin.entry, "./dist/index.js");
+  assert.equal(JSON.parse(colaPackage).version, "0.1.1");
+  assert.match(colaDist, /function defineChannel/);
+  assert.doesNotMatch(colaDist, /^import .*@marswave\/cola-plugin-sdk/m);
+  assert.equal(JSON.parse(manifest).display, "browser");
+  assert.equal(JSON.parse(manifest).scope, "/");
+  assert.match(await readFile(new URL("public/update.json", root), "utf8"), /downloadUrl/);
+  assert.match(await readFile(new URL("public/update.json", root), "utf8"), /packageUrl/);
 });
 
 test("yesterday's first task becomes today's unique result", async () => {
@@ -124,36 +161,123 @@ test("remote sync and installed app keep rollover and refresh hooks", async () =
   assert.match(appScript, /applyRemoteState[\s\S]*?SummerDayRollover\.apply\(state, dateKey\(\)\)/);
   assert.match(appScript, /visibilitychange/);
   assert.match(appScript, /window\.addEventListener\('focus'/);
-  assert.match(syncScript, /refreshInstalledApp/);
-  assert.match(syncScript, /event\?\.immediate/);
-  assert.match(syncScript, /registration\.update/);
-  assert.match(syncScript, /window\.location\.reload/);
-  assert.match(worker, /summer-workbench-lite-v6/);
+  assert.match(appScript, /mergeRemoteState/);
+  assert.match(syncScript, /syncNow/);
+  assert.match(syncScript, /PENDING_SYNC_KEY/);
+  assert.match(syncScript, /已保存到本机/);
+  assert.match(syncScript, /accountButton\.hidden = false/);
+  assert.match(syncScript, /api\/local\/pair\/start/);
+  assert.match(syncScript, /api\/local\/pair\/join/);
+  assert.match(syncScript, /location\.protocol === 'http:'/);
+  assert.match(syncScript, /joinWorkspaceByCode/);
+  assert.match(syncScript, /params\.get\('pair'\)/);
+  assert.match(syncScript, /data\.pairUrl \|\|/);
+  assert.match(syncScript, /PAIR_HANDOFF_KEY/);
+  assert.match(syncScript, /rememberPairHandoff/);
+  assert.match(syncScript, /persistLocalAvatar/);
+  assert.match(syncScript, /LOCAL_AVATAR_BACKUP_KEY/);
+  assert.match(syncScript, /recoverAvatarAfterLoadFailure/);
+  assert.doesNotMatch(syncScript, /localOnly\) return;/);
+  assert.match(syncScript, /最新记录还没有保存成功/);
+  assert.match(syncScript, /10 分钟有效/);
+  assert.match(syncScript, /可添加到桌面/);
+  assert.match(syncScript, /同一个 Safari\/Chrome/);
+  assert.doesNotMatch(syncScript, /pairedFromLink = true;\s*history\.replaceState/);
+  assert.match(syncScript, /pairLinkFailed/);
+  assert.match(syncScript, /二维码配对没有完成/);
+  assert.match(syncScript, /pendingUpload/);
+  assert.match(syncScript, /UPDATE_MANIFEST_URL/);
+  assert.match(syncScript, /checkForUpdates/);
+  assert.match(syncScript, /更新后无需重新设置/);
+  assert.match(syncScript, /uploadState\(attempt = 0\)/);
+  assert.match(syncScript, /retry < 1/);
+  assert.match(syncScript, /\(!localOnly && !navigator\.onLine\)/);
+  assert.doesNotMatch(syncScript, /window\.location\.reload/);
+  assert.doesNotMatch(syncScript, /setInterval\(async \(\) => \{/);
+  assert.match(worker, /summer-workbench-lite-v16/);
+  assert.match(worker, /qr\.js/);
+  assert.match(worker, /cola\.js/);
+  assert.match(worker, /ai-connector\.js/);
+  assert.match(worker, /avatar-default\.svg/);
+  assert.doesNotMatch(worker, /avatar\.png/);
   assert.match(worker, /SKIP_WAITING/);
   assert.match(worker, /cache: "no-store"/);
 });
 
-test("durable storage and pairing routes are packaged", async () => {
-  const [schema, workspaceRoute, startRoute, joinRoute, avatarRoute, resetRoute, hosting] = await Promise.all([
-    readFile(new URL("db/schema.ts", root), "utf8"),
-    readFile(new URL("app/api/workspace/route.ts", root), "utf8"),
-    readFile(new URL("app/api/pair/start/route.ts", root), "utf8"),
-    readFile(new URL("app/api/pair/join/route.ts", root), "utf8"),
-    readFile(new URL("app/api/avatar/route.ts", root), "utf8"),
-    readFile(new URL("app/api/reset/route.ts", root), "utf8"),
-    readFile(new URL(".openai/hosting.json", root), "utf8"),
+test("local pairing, safe storage and AI connectors remain in the fan edition", async () => {
+  const [server, sync, colaPlugin, connector] = await Promise.all([
+    readFile(new URL("scripts/local_server.py", root), "utf8"),
+    readFile(new URL("public/sync.js", root), "utf8"),
+    readFile(new URL("cola-plugin/dist/index.js", root), "utf8"),
+    readFile(new URL("workbench-connector/src/bridge.mjs", root), "utf8"),
   ]);
-  assert.match(schema, /workspaces/);
-  assert.match(schema, /devices/);
-  assert.match(schema, /pairCodes/);
-  assert.match(workspaceRoute, /UPDATE workspaces/);
-  assert.match(startRoute, /5 \* 60 \* 1000/);
-  assert.match(joinRoute, /pair_attempts/);
-  assert.match(schema, /avatarData/);
-  assert.match(avatarRoute, /avatar_data = \?/);
-  assert.match(avatarRoute, /encodeBase64/);
-  assert.match(await readFile(new URL("public/sync.js", root), "utf8"), /readJsonResponse/);
-  assert.match(resetRoute, /state_json = '\{\}'/);
-  assert.equal(JSON.parse(hosting).d1, "DB");
-  assert.equal(JSON.parse(hosting).r2, "ASSETS");
+  assert.match(server, /"workspaces": \{\}, "devices": \{\}, "pairCodes": \{\}/);
+  assert.match(server, /PAIR_TTL_MS = 10 \* 60 \* 1000/);
+  assert.match(server, /PUBLIC_FILES/);
+  assert.match(server, /default_data_path/);
+  assert.match(sync, /readJsonResponse/);
+  assert.match(colaPlugin, /function defineChannel/);
+  assert.match(connector, /43128/);
+});
+
+test("local pairing refuses competing port processes", async () => {
+  const [syncScript, localServer, packageScript] = await Promise.all([
+    readFile(new URL("public/sync.js", root), "utf8"),
+    readFile(new URL("scripts/local_server.py", root), "utf8"),
+    readFile(new URL("scripts/package-offline.mjs", root), "utf8"),
+  ]);
+  assert.match(syncScript, /readJsonResponse\(response, '暂时无法生成同步码/);
+  assert.match(syncScript, /readJsonResponse\(response, '暂时无法连接设备/);
+  assert.match(localServer, /except OSError as error:/);
+  assert.doesNotMatch(localServer, /ThreadingHTTPServer\(\("0\.0\.0\.0", 0\)/);
+  assert.match(localServer, /ACTIVE_PORT = server\.server_address\[1\]/);
+  assert.match(localServer, /lan_url\(\)/);
+  assert.match(localServer, /"pairUrl": f"\{lan_url\(\)\}\?pair=\{code\}"/);
+  assert.match(localServer, /PAIR_TTL_MS = 10 \* 60 \* 1000/);
+  assert.match(localServer, /def prune_pair_codes/);
+  assert.match(localServer, /BACKUP_PATH/);
+  assert.match(localServer, /shutil\.copyfile/);
+  assert.match(localServer, /default_data_path/);
+  assert.match(localServer, /Application Support/);
+  assert.match(localServer, /legacy_data_paths/);
+  assert.match(localServer, /joinedTokens/);
+  assert.doesNotMatch(localServer, /device\["workspaceId"\] = pair\["workspaceId"\][\s\S]{0,300}del data\["pairCodes"\]\[code\]/);
+  assert.match(packageScript, /\.summer-workbench-port/);
+  assert.match(packageScript, /start_server python3/);
+  assert.match(packageScript, /必须包含 \?pair=/);
+  assert.match(packageScript, /VERSION/);
+  assert.match(packageScript, /update\.sh/);
+  assert.match(packageScript, /update\.ps1/);
+  assert.match(packageScript, /packageUrl/);
+});
+
+test("a damaged browser record is recovered from the last good backup", async () => {
+  const source = await readFile(new URL("public/app.js", root), "utf8");
+  const start = source.indexOf("  function load() {");
+  const end = source.indexOf("  function backupLocalState(", start);
+  assert.ok(start > 0 && end > start);
+  const values = new Map([
+    ["summer-os-minimum-v1", "{damaged"],
+    ["summer-os-last-good-backup-v1", JSON.stringify({ state: { tasks: [{ id: "safe-task", title: "保留的记录" }] } })]
+  ]);
+  const context = {
+    localStorage: { getItem: key => values.get(key) || null, setItem: (key, value) => values.set(key, value) },
+    structuredClone,
+    window: { SummerDayRollover: { apply: () => ({ rolledOver: false }) } }
+  };
+  const setup = `(() => {
+    const KEY = 'summer-os-minimum-v1', BACKUP_KEY = 'summer-os-last-good-backup-v1', STATE_SCHEMA_VERSION = 2;
+    const dateKey = () => '2026-09-18';
+    const defaults = { tasks: [], decisions: [], captures: [], memoryItems: [], scheduleItems: [], plans: [], dailyReviews: [], colaDeliveryLog: [], aiActionLog: [], syncConflicts: [], mode: 'flow' };
+    const isInboxCategory = () => true;
+    const normalizedCaptureCategory = () => 'uncategorized';
+    let captureMigrationNeeded = false;
+    let recoveredFromBackup = false;
+    ${source.slice(start, end)}
+    const result = load();
+    return { result, recoveredFromBackup };
+  })()`;
+  const recovered = vm.runInNewContext(setup, context);
+  assert.equal(recovered.result.tasks[0].title, "保留的记录");
+  assert.equal(recovered.recoveredFromBackup, true);
 });

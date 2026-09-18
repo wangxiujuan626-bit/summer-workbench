@@ -1,0 +1,28 @@
+{
+  "name": "summer-workbench-cola-plugin",
+  "version": "0.1.1",
+  "private": false,
+  "type": "module",
+  "description": "Connect Summer Workbench daily experience cards to Cola's shared desktop session.",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --packages=bundle --outfile=dist/index.js"
+  },
+  "dependencies": {
+    "@marswave/cola-plugin-sdk": "^0.0.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  },
+  "cola": {
+    "plugin": {
+      "id": "summer-workbench",
+      "entry": "./dist/index.js"
+    },
+    "channel": {
+      "label": "Summer 工作台",
+      "description": "把确认后的今日经历卡送进 Cola 主对话",
+      "aliases": ["summer-workbench"],
+      "markdownCapable": true
+    }
+  }
+}
