@@ -48,3 +48,5 @@ yarn-error.log*
 **/.summer-workbench-port
 **/workspace.json
 **/workspace.json.bak
+desktop/.build/
+desktop/dist/

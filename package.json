@@ -12,6 +12,8 @@
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "package:offline": "node scripts/package-offline.mjs",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:dist": "npm --prefix desktop run dist",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

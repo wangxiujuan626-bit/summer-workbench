@@ -1,0 +1,43 @@
+{
+  "name": "summer-workbench-desktop",
+  "productName": "Summer工作台",
+  "version": "1.1.0",
+  "description": "Summer 工作台纯本地桌面版",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "prepare-workbench": "node build-workbench.mjs",
+    "dev": "npm run prepare-workbench && electron .",
+    "dist": "npm run prepare-workbench && electron-builder"
+  },
+  "dependencies": {
+    "electron-updater": "6.1.8"
+  },
+  "devDependencies": {
+    "electron": "30.0.9",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "ai.summer.workbench",
+    "artifactName": "Summer工作台-${version}-${os}-${arch}.${ext}",
+    "files": ["main.mjs", "preload.mjs", "local-server.mjs", "package.json"],
+    "extraResources": [{ "from": ".build/workbench", "to": "workbench" }],
+    "publish": [{ "provider": "github", "owner": "wangxiujuan626-bit", "repo": "summer-workbench" }],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Summer工作台"
+    }
+  }
+}
+
