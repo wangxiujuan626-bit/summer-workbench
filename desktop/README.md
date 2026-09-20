@@ -4,6 +4,12 @@
 
 普通用户只需要安装一次。之后从桌面图标打开，应用会自动启动本地服务；更新由 GitHub Releases 提供，记录和头像保存在系统用户数据目录，不会写进安装包，也不会在更新时被覆盖。
 
+## 当前发布策略：先不上系统签名
+
+当前第一版桌面安装包先不购买或配置 Apple、Windows 的系统代码签名，优先让大家把完整功能跑起来。首次安装时，macOS 可能需要在“系统设置 → 隐私与安全性”里允许打开，Windows 可能出现一次 SmartScreen 提示。这个提示是系统在确认未知发布者，不代表工作台会把记录上传到云端。
+
+应用仍会尝试通过 GitHub Releases 自动检查更新。未签名环境下，如果系统拒绝自动替换，工作台会保留数据并提示从 GitHub 下载新版；更新时不需要重新填写昵称、头像或工作记录。
+
 ## 构建
 
 在 `desktop/` 目录安装依赖后执行：
@@ -14,7 +20,7 @@ npm run dist -- --mac
 npm run dist -- --win
 ```
 
-正式发布由 `.github/workflows/desktop-release.yml` 在 GitHub Actions 中完成。打 `v*` 标签后，工作流分别生成 macOS 安装包和 Windows 安装包，并创建 GitHub Release。
+正式发布由 `.github/workflows/desktop-release.yml` 在 GitHub Actions 中完成。当前工作流明确关闭系统签名，打 `v*` 标签后分别生成 macOS 安装包和 Windows 安装包，并创建 GitHub Release。以后如果需要减少系统提示，再单独补 Apple Developer 和 Windows 代码签名，不影响现有本地数据结构。
 
 ## 数据与隐私
 
