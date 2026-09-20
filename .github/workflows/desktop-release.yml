@@ -24,6 +24,10 @@ jobs:
       - name: Build macOS app
         working-directory: desktop
         run: npm run dist -- --mac
+        env:
+          # First release intentionally skips Apple signing/notarization.
+          # This keeps the package buildable before a paid Apple Developer account is added.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - uses: actions/upload-artifact@v4
         with:
           name: summer-workbench-macos
@@ -46,6 +50,10 @@ jobs:
       - name: Build Windows installer
         working-directory: desktop
         run: npm run dist -- --win
+        env:
+          # First release intentionally skips Windows code signing.
+          # SmartScreen may show a first-run warning until reputation is established.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - uses: actions/upload-artifact@v4
         with:
           name: summer-workbench-windows
@@ -67,4 +75,3 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
