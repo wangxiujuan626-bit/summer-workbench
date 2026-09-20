@@ -23,7 +23,7 @@ jobs:
         run: npm install
       - name: Build macOS app
         working-directory: desktop
-        run: npm run dist -- --mac
+        run: npm run dist -- --mac --publish never
         env:
           # First release intentionally skips Apple signing/notarization.
           # This keeps the package buildable before a paid Apple Developer account is added.
@@ -49,7 +49,7 @@ jobs:
         run: npm install
       - name: Build Windows installer
         working-directory: desktop
-        run: npm run dist -- --win
+        run: npm run dist -- --win --publish never
         env:
           # First release intentionally skips Windows code signing.
           # SmartScreen may show a first-run warning until reputation is established.
