@@ -20,4 +20,6 @@ test('desktop package includes a self-contained launcher and release updater', a
   assert.match(workflow, /macos-latest/);
   assert.match(workflow, /windows-latest/);
   assert.match(workflow, /softprops\/action-gh-release/);
+  assert.match(workflow, /CSC_IDENTITY_AUTO_DISCOVERY:\s*["']false["']/g);
+  assert.equal((workflow.match(/CSC_IDENTITY_AUTO_DISCOVERY:\s*["']false["']/g) || []).length, 2);
 });
