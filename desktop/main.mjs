@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 // electron-updater is published as CommonJS. Import its default export so the
 // packaged ESM entry point also works in Electron's production runtime.
 import updater from 'electron-updater';
@@ -11,6 +11,10 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 const { autoUpdater } = updater;
 let mainWindow;
 let localServer;
+
+function sendUpdateEvent(channel, payload = {}) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+}
 
 function workbenchRoot() {
   return app.isPackaged
@@ -34,6 +38,7 @@ async function startWorkbench() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: join(here, 'preload.mjs'),
     },
   });
   await mainWindow.loadURL(localServer.url);
@@ -42,20 +47,43 @@ async function startWorkbench() {
 
 function enableAutomaticUpdates() {
   if (!app.isPackaged) return;
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.on('update-downloaded', async () => {
-    const choice = await dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: '工作台已准备好更新',
-      message: '新版本已经下载完成，重启后即可完成更新。你的记录和头像会保留。',
-      buttons: ['立即重启更新', '稍后更新'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-    if (choice.response === 0) autoUpdater.quitAndInstall(false, true);
+  autoUpdater.on('update-available', info => {
+    sendUpdateEvent('desktop-update-available', { version: info?.version || '' });
   });
-  autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+  autoUpdater.on('download-progress', progress => {
+    sendUpdateEvent('desktop-update-progress', { percent: Math.round(progress?.percent || 0) });
+  });
+  autoUpdater.on('update-downloaded', info => {
+    sendUpdateEvent('desktop-update-downloaded', { version: info?.version || '' });
+  });
+  autoUpdater.on('error', error => {
+    sendUpdateEvent('desktop-update-error', { message: error instanceof Error ? error.message : '更新失败' });
+  });
+
+  ipcMain.handle('desktop-update-check', async () => {
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      const version = result?.updateInfo?.version || '';
+      if (version) sendUpdateEvent('desktop-update-available', { version });
+      return { available: Boolean(version), version };
+    } catch (error) {
+      sendUpdateEvent('desktop-update-error', { message: error instanceof Error ? error.message : '更新检查失败' });
+      return { available: false };
+    }
+  });
+  ipcMain.handle('desktop-update-download', async () => {
+    try {
+      await autoUpdater.downloadUpdate();
+      return { ok: true };
+    } catch (error) {
+      sendUpdateEvent('desktop-update-error', { message: error instanceof Error ? error.message : '下载更新失败' });
+      return { ok: false };
+    }
+  });
+  ipcMain.on('desktop-update-install', () => autoUpdater.quitAndInstall(false, true));
+
 }
 
 app.whenReady().then(async () => {
