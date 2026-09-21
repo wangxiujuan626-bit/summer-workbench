@@ -45,8 +45,9 @@
   const WORKSPACE_ID_KEY = 'summer-os-workspace-id-v1';
   const PAIR_HANDOFF_KEY = 'summer-os-pair-handoff-v1';
   const UPDATE_DISMISSED_KEY = 'summer-os-update-dismissed-v1';
-  const APP_VERSION = '1.1.1';
+  const APP_VERSION = '1.1.4';
   const UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/wangxiujuan626-bit/summer-workbench/main/public/update.json';
+  const desktopUpdater = window.summerDesktop || null;
   // HTTP is reserved for the local package; the hosted version is HTTPS.
   const localOnly = location.protocol === 'file:' || location.protocol === 'http:';
   const workspaceApiPath = localOnly ? '/api/local/workspace' : '/api/workspace';
@@ -123,7 +124,68 @@
     return 0;
   }
 
+  function showUpdateAvailable(version) {
+    const nextVersion = String(version || '').trim();
+    if (!nextVersion || compareVersions(nextVersion, APP_VERSION) <= 0) return;
+    updateNoticeText.textContent = `发现工作台 v${nextVersion}，点击即可更新。记录和头像会保留。`;
+    updateNotice.hidden = false;
+    updateOpenButton.disabled = false;
+    updateOpenButton.textContent = desktopUpdater?.isDesktop ? '立即更新' : '查看并下载';
+    updateOpenButton.onclick = async () => {
+      if (!desktopUpdater?.isDesktop) {
+        window.open('https://github.com/wangxiujuan626-bit/summer-workbench/releases/latest', '_blank', 'noopener,noreferrer');
+        return;
+      }
+      updateOpenButton.disabled = true;
+      updateOpenButton.textContent = '准备更新…';
+      const result = await desktopUpdater.downloadUpdate();
+      if (result?.ok === false) {
+        updateOpenButton.disabled = false;
+        updateOpenButton.textContent = '重试更新';
+      }
+    };
+    updateDismissButton.onclick = () => {
+      localStorage.setItem(UPDATE_DISMISSED_KEY, nextVersion);
+      updateNotice.hidden = true;
+    };
+  }
+
+  function bindDesktopUpdater() {
+    if (!desktopUpdater?.isDesktop) return;
+    desktopUpdater.onUpdateAvailable(({ version } = {}) => showUpdateAvailable(version));
+    desktopUpdater.onUpdateProgress(({ percent } = {}) => {
+      updateNotice.hidden = false;
+      updateNoticeText.textContent = `正在下载工作台更新… ${Math.max(0, Math.min(100, Math.round(percent || 0)))}%`;
+      updateOpenButton.disabled = true;
+      updateOpenButton.textContent = '下载中…';
+    });
+    desktopUpdater.onUpdateDownloaded(({ version } = {}) => {
+      updateNotice.hidden = false;
+      updateNoticeText.textContent = `工作台 v${version || '新版本'} 已下载完成，重启后完成更新。`;
+      updateOpenButton.disabled = false;
+      updateOpenButton.textContent = '重启更新';
+      updateOpenButton.onclick = () => desktopUpdater.restartAndInstall();
+    });
+    desktopUpdater.onUpdateError(() => {
+      updateNotice.hidden = false;
+      updateNoticeText.textContent = '更新下载失败，记录没有受到影响。';
+      updateOpenButton.disabled = false;
+      updateOpenButton.textContent = '重试更新';
+      updateOpenButton.onclick = () => desktopUpdater.checkForUpdates();
+    });
+  }
+
   async function checkForUpdates() {
+    if (desktopUpdater?.isDesktop) {
+      try {
+        const result = await desktopUpdater.checkForUpdates();
+        if (result?.available && result.version) showUpdateAvailable(result.version);
+        return result;
+      } catch (error) {
+        console.debug('Desktop update check skipped:', error);
+        return null;
+      }
+    }
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
@@ -133,13 +195,7 @@
       const manifest = await response.json();
       if (!manifest?.version || compareVersions(manifest.version, APP_VERSION) <= 0) return null;
       if (localStorage.getItem(UPDATE_DISMISSED_KEY) === String(manifest.version)) return manifest;
-      updateNoticeText.textContent = `发现工作台 v${manifest.version}，当前版本 v${APP_VERSION}。记录会保留，更新后无需重新设置。`;
-      updateNotice.hidden = false;
-      updateOpenButton.onclick = () => window.open(manifest.downloadUrl || 'https://github.com/wangxiujuan626-bit/summer-workbench', '_blank', 'noopener,noreferrer');
-      updateDismissButton.onclick = () => {
-        localStorage.setItem(UPDATE_DISMISSED_KEY, String(manifest.version));
-        updateNotice.hidden = true;
-      };
+      showUpdateAvailable(manifest.version);
       return manifest;
     } catch (error) {
       // 更新检查不是工作台运行条件；离线时安静跳过。
@@ -458,6 +514,7 @@
   window.addEventListener('summer-os:state-saved', scheduleUpload);
   window.addEventListener('online', setLocalStatus);
   window.addEventListener('offline', setLocalStatus);
+  bindDesktopUpdater();
 
   async function syncNow() {
     if (!initialized || syncing) return false;
