@@ -45,7 +45,7 @@
   const WORKSPACE_ID_KEY = 'summer-os-workspace-id-v1';
   const PAIR_HANDOFF_KEY = 'summer-os-pair-handoff-v1';
   const UPDATE_DISMISSED_KEY = 'summer-os-update-dismissed-v1';
-  const APP_VERSION = '1.1.0';
+  const APP_VERSION = '1.1.1';
   const UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/wangxiujuan626-bit/summer-workbench/main/public/update.json';
   // HTTP is reserved for the local package; the hosted version is HTTPS.
   const localOnly = location.protocol === 'file:' || location.protocol === 'http:';
