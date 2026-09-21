@@ -1,7 +1,7 @@
 {
   "name": "summer-workbench-desktop",
   "productName": "Summer工作台",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Summer 工作台纯本地桌面版",
   "private": true,
   "type": "module",
@@ -23,9 +23,12 @@
     "artifactName": "Summer工作台-${version}-${os}-${arch}.${ext}",
     "files": ["main.mjs", "preload.mjs", "local-server.mjs", "package.json"],
     "extraResources": [{ "from": ".build/workbench", "to": "workbench" }],
+    "afterPack": "after-pack.mjs",
     "publish": [{ "provider": "github", "owner": "wangxiujuan626-bit", "repo": "summer-workbench" }],
     "mac": {
       "category": "public.app-category.productivity",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
       "target": ["dmg", "zip"]
     },
     "win": {
@@ -40,4 +43,3 @@
     }
   }
 }
-
