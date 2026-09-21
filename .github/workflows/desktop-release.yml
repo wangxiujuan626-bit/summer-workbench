@@ -25,8 +25,9 @@ jobs:
         working-directory: desktop
         run: npm run dist -- --mac --publish never
         env:
-          # First release intentionally skips Apple signing/notarization.
-          # This keeps the package buildable before a paid Apple Developer account is added.
+          # No paid Apple Developer certificate is available yet. The
+          # afterPack hook still applies a complete ad-hoc signature so the
+          # downloaded app is not reported as a damaged bundle.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - uses: actions/upload-artifact@v4
         with:
