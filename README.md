@@ -2,6 +2,14 @@
 
 一个纯本地的行动记录器：随手记、自动整理、每日复盘、手机与电脑同步，也可以按需连接 Cola 或其他 AI。
 
+## 普通用户直接下载
+
+[点击下载最新版](https://github.com/wangxiujuan626-bit/summer-workbench/releases/latest)
+
+进入下载页后，在 `Assets` 里选择适合自己电脑的安装包。当前公开的是 **macOS Apple 芯片（`.dmg`）** 安装包。
+
+**不要点击 `Code → Download ZIP`，也不要下载整个仓库。** 那是源码，不是普通用户的安装包。
+
 ## 这个仓库就是公开入口
 
 这是 Summer 工作台 Lite 的唯一公开 GitHub 仓库。粉丝直接在 GitHub 搜索“Summer 工作台 Lite”或“summer-workbench”，进入本仓库即可使用和查看源码，不需要向作者索取安装包，也不需要登录 Cloudflare。
@@ -12,14 +20,14 @@
 
 ## 粉丝直接使用
 
-正式发布时，普通用户优先从 GitHub 的 Releases 下载对应系统的安装包：
+普通用户只需要从 [Releases 下载页](https://github.com/wangxiujuan626-bit/summer-workbench/releases/latest) 下载安装包：
 
-- macOS Apple 芯片：`Summer工作台-版本-mac-arm64.dmg`
-- Windows：`Summer工作台-版本-win-x64.exe`
+- macOS Apple 芯片：下载文件名以 `.dmg` 结尾的文件
+- Windows：暂未提供 Windows 安装包
 
 安装一次后，直接点击桌面上的“Summer工作台”图标即可。应用会自己启动本地服务、保留记录和头像，并在后台检查更新。粉丝不需要安装 Python、Node.js，也不需要寻找或运行 `start.command`。
 
-仓库根目录的 `Summer工作台-Lite.zip` 仍然保留，作为兼容运行包和开发备用入口，不再作为普通用户的首选方式。普通用户请从 Releases 下载 `.dmg` 或 `.exe`，不要下载仓库根目录的旧 ZIP。
+仓库根目录的 `Summer工作台-Lite.zip` 仍然保留，作为兼容运行包和开发备用入口，不是普通用户的首选方式。普通用户请从 Releases 下载 `.dmg`，不要下载仓库根目录的 ZIP。
 
 在仓库文件列表点击 `Summer工作台-Lite.zip`，再点击下载按钮。解压后：
 
