@@ -1,45 +1,49 @@
 {
-  "name": "summer-workbench-desktop",
-  "productName": "Summer工作台",
-  "version": "1.1.2",
-  "description": "Summer 工作台纯本地桌面版",
+  "name": "summer-workbench-lite",
+  "version": "1.1.4",
   "private": true,
-  "type": "module",
-  "main": "main.mjs",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
-    "prepare-workbench": "node build-workbench.mjs",
-    "dev": "npm run prepare-workbench && electron .",
-    "dist": "npm run prepare-workbench && electron-builder"
+    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
+    "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
+    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "package:offline": "node scripts/package-offline.mjs",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:dist": "npm --prefix desktop run dist",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "electron-updater": "6.1.8"
+    "drizzle-orm": "0.45.2",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
   },
   "devDependencies": {
-    "electron": "30.0.9",
-    "electron-builder": "24.13.3"
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@eslint/js": "9.39.4",
+    "@next/eslint-plugin-next": "16.2.6",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.4",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "16.4.0",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.59.3",
+    "vinext": "1.0.0-beta.2",
+    "vite": "8.0.13",
+    "wrangler": "4.92.0"
   },
-  "build": {
-    "appId": "ai.summer.workbench",
-    "artifactName": "Summer工作台-${version}-${os}-${arch}.${ext}",
-    "files": ["main.mjs", "preload.mjs", "local-server.mjs", "package.json"],
-    "extraResources": [{ "from": ".build/workbench", "to": "workbench" }],
-    "afterPack": "after-pack.mjs",
-    "publish": [{ "provider": "github", "owner": "wangxiujuan626-bit", "repo": "summer-workbench" }],
-    "mac": {
-      "category": "public.app-category.productivity",
-      "hardenedRuntime": false,
-      "gatekeeperAssess": false,
-      "target": ["dmg", "zip"]
-    },
-    "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": false,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Summer工作台"
-    }
-  }
+  "type": "module"
 }
