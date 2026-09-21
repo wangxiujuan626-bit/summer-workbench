@@ -1,11 +1,14 @@
 import { app, BrowserWindow, dialog } from 'electron';
-import { autoUpdater } from 'electron-updater';
+// electron-updater is published as CommonJS. Import its default export so the
+// packaged ESM entry point also works in Electron's production runtime.
+import updater from 'electron-updater';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startLocalServer } from './local-server.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
+const { autoUpdater } = updater;
 let mainWindow;
 let localServer;
 
@@ -77,4 +80,3 @@ app.on('before-quit', () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
-
